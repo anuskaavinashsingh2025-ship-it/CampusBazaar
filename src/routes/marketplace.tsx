@@ -1,9 +1,11 @@
 import { createFileRoute, Link, useSearch } from "@tanstack/react-router";
 import { useCallback, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { ChevronDown } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 import { ProductCard, type ProductCardModel } from "@/components/marketplace/product-card";
+import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/marketplace")({
   head: () => ({
@@ -40,6 +42,7 @@ function MarketplacePage() {
   // Locally-hide listings that were just deleted, so the row disappears
   // immediately without waiting for the 5s refetch.
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
+  const [visibleCount, setVisibleCount] = useState(16);
   const handleLocalDelete = useCallback((id: string) => {
     setHiddenIds((prev) => {
       const next = new Set(prev);
@@ -175,7 +178,7 @@ function MarketplacePage() {
               Loading…
             </div>
           ) : visibleProducts.length ? (
-            visibleProducts.map((p) => (
+            visibleProducts.slice(0, visibleCount).map((p) => (
               <ProductCard key={p.id} product={p} onDeleted={handleLocalDelete} />
             ))
           ) : (
@@ -186,6 +189,14 @@ function MarketplacePage() {
             </div>
           )}
         </div>
+        {visibleCount < visibleProducts.length && (
+          <div className="mt-6 flex justify-center">
+            <Button variant="outline" onClick={() => setVisibleCount((c) => c + 16)}>
+              Load More
+              <ChevronDown className="ml-1 h-4 w-4" />
+            </Button>
+          </div>
+        )}
       </main>
     </div>
   );

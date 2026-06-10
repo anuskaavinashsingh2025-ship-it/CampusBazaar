@@ -245,12 +245,6 @@ function FoodDetailsPage() {
                 Posted {new Date(listing.created_at).toLocaleDateString()}
               </p>
               <p className="mt-1 text-xl font-bold text-primary">{priceLabel}</p>
-              <div className="mt-2">
-                <ListingStats
-                  viewsCount={listing.views_count ?? 0}
-                  wishlistCount={listing.wishlist_count ?? 0}
-                />
-              </div>
             </div>
 
             <div className="flex flex-wrap gap-2">

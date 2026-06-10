@@ -40,7 +40,11 @@ const SECTIONS: { key: ChatSection; label: string; description: string }[] = [
     description: "Conversations originating from accepted requests",
   },
 
-  { key: "archived", label: "Archived Chats", description: "Completed transactions" },
+  {
+    key: "archived",
+    label: "Archived Chats",
+    description: "Completed and auto-archived conversations — these are deleted 30 days after archiving",
+  },
 
   { key: "reported", label: "Reported Chats", description: "Chats where a report has been filed" },
 ];

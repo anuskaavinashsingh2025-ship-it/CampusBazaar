@@ -408,6 +408,9 @@ function MarketplaceHome() {
   }, [products, query]);
 
   // Compute the items to show for the Fresh recommendations area.
+  // On the home page preview we cap at 8 items — users click "View all" for the full list.
+  const HOME_PREVIEW_LIMIT = 8;
+
   const itemsToShow = useMemo(() => {
     if (isLoading) return [] as ProductCardModel[];
     // If a category is selected, pick the correct dataset:
@@ -432,11 +435,6 @@ function MarketplaceHome() {
     navigate({ to: "/upload-product" });
   };
 
-  const handleDisabled = (label: string) => {
-    toast.message(`${label} is coming soon`, {
-      description: "This is not part of the current phase.",
-    });
-  };
 
   const handleProfileTap = () => {
     if (!user) {
@@ -453,7 +451,11 @@ function MarketplaceHome() {
 
   const openSellerProfile = () => {
     setProfilePickerOpen(false);
-    navigate({ to: "/seller-profile" });
+    if (sellerProfile?.slug) {
+      navigate({ to: "/seller/$slug", params: { slug: sellerProfile.slug } });
+    } else {
+      navigate({ to: "/seller-profile" });
+    }
   };
 
   const handleLogout = async () => {
@@ -465,98 +467,6 @@ function MarketplaceHome() {
     <div className="min-h-screen bg-background pb-24">
       <header className="sticky top-0 z-40 border-b bg-card/90 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3">
-          <Sheet>
-            <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" aria-label="Menu">
-                <Menu className="h-5 w-5" />
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="left" className="p-0">
-              <div className="p-6">
-                <SheetHeader className="text-left">
-                  <SheetTitle>CampusBazar</SheetTitle>
-                </SheetHeader>
-                <div className="mt-2 text-sm text-muted-foreground">
-                  {user ? (profile?.full_name ?? user.email) : "Guest"}
-                </div>
-              </div>
-              <Separator />
-              <div className="space-y-1 p-2">
-                <Button
-                  variant="ghost"
-                  className="w-full justify-start"
-                  onClick={() => navigate({ to: "/" })}
-                >
-                  Home
-                </Button>
-                <Button
-                  variant="ghost"
-                  className="w-full justify-start"
-                  onClick={() => navigate({ to: "/rent" })}
-                >
-                  Rent
-                </Button>
-                <Button
-                  variant="ghost"
-                  className="w-full justify-start"
-                  onClick={() => navigate({ to: "/food" })}
-                >
-                  Food Hub
-                </Button>
-                <Button
-                  variant="ghost"
-                  className="w-full justify-start"
-                  onClick={() => navigate({ to: "/notes" })}
-                >
-                  Notes Hub
-                </Button>
-                <Button
-                  variant="ghost"
-                  className="w-full justify-start"
-                  onClick={() => navigate({ to: "/dashboard" })}
-                  disabled={!user}
-                >
-                  Dashboard
-                </Button>
-                <Button
-                  variant="ghost"
-                  className="w-full justify-start"
-                  onClick={() =>
-                    sellerProfile?.slug
-                      ? navigate({ to: "/seller/$slug", params: { slug: sellerProfile.slug } })
-                      : handleSell()
-                  }
-                  disabled={!user}
-                >
-                  Seller profile
-                </Button>
-                <Separator className="my-2" />
-                {isAdmin && (
-                  <Button
-                    variant="ghost"
-                    className="w-full justify-start"
-                    onClick={() => navigate({ to: "/admin" })}
-                  >
-                    Admin portal
-                  </Button>
-                )}
-                {user ? (
-                  <Button
-                    variant="ghost"
-                    className="w-full justify-start text-destructive"
-                    onClick={handleLogout}
-                  >
-                    Log out
-                  </Button>
-                ) : (
-                  <Button className="w-full" onClick={() => navigate({ to: "/login" })}>
-                    Sign in
-                  </Button>
-                )}
-              </div>
-            </SheetContent>
-          </Sheet>
-
           <Link
             to="/"
             aria-label="CampusBazar home"
@@ -636,8 +546,8 @@ function MarketplaceHome() {
 
         <div className="mt-6 flex items-center justify-between">
           <div className="text-sm font-semibold">Browse Categories</div>
-          <Button variant="ghost" size="sm" onClick={() => handleDisabled("View all categories")}>
-            View all
+          <Button variant="ghost" size="sm" asChild>
+            <Link to="/marketplace">View all</Link>
           </Button>
         </div>
 
@@ -653,9 +563,9 @@ function MarketplaceHome() {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => handleDisabled("View all recommendations")}
+            asChild
           >
-            View all
+            <Link to="/marketplace">View all</Link>
           </Button>
         </div>
 
@@ -665,7 +575,7 @@ function MarketplaceHome() {
               Loading…
             </div>
           ) : itemsToShow.length ? (
-            itemsToShow.map((p) => <ProductCard key={p.id} product={p} />)
+            itemsToShow.slice(0, HOME_PREVIEW_LIMIT).map((p) => <ProductCard key={p.id} product={p} />)
           ) : (
             <div className="col-span-full py-16 text-center text-sm text-muted-foreground">
               {selectedCategory
@@ -674,6 +584,97 @@ function MarketplaceHome() {
             </div>
           )}
         </div>
+        {itemsToShow.length > HOME_PREVIEW_LIMIT && (
+          <div className="mt-3 flex justify-center">
+            <Button variant="outline" size="sm" asChild>
+              <Link to="/marketplace">View all {itemsToShow.length} listings</Link>
+            </Button>
+          </div>
+        )}
+
+        {/* Food preview section */}
+        {!selectedCategory && foodRecs.length > 0 && (
+          <div className="mt-10">
+            <div className="flex items-center justify-between">
+              <div className="text-sm font-semibold">Food Listings</div>
+              <Button variant="ghost" size="sm" asChild>
+                <Link to="/food">View all</Link>
+              </Button>
+            </div>
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+              {loadingFood ? (
+                <div className="col-span-full py-8 text-center text-sm text-muted-foreground">Loading…</div>
+              ) : (
+                (foodRecs as unknown as ProductCardModel[]).slice(0, HOME_PREVIEW_LIMIT).map((p) => (
+                  <ProductCard key={p.id} product={p} />
+                ))
+              )}
+            </div>
+            {foodRecs.length > HOME_PREVIEW_LIMIT && (
+              <div className="mt-3 flex justify-center">
+                <Button variant="outline" size="sm" asChild>
+                  <Link to="/food">View all food listings</Link>
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Rentals preview section */}
+        {!selectedCategory && rentalRecs.length > 0 && (
+          <div className="mt-10">
+            <div className="flex items-center justify-between">
+              <div className="text-sm font-semibold">Rental Listings</div>
+              <Button variant="ghost" size="sm" asChild>
+                <Link to="/rent/">View all</Link>
+              </Button>
+            </div>
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+              {loadingRentals ? (
+                <div className="col-span-full py-8 text-center text-sm text-muted-foreground">Loading…</div>
+              ) : (
+                (rentalRecs as unknown as ProductCardModel[]).slice(0, HOME_PREVIEW_LIMIT).map((p) => (
+                  <ProductCard key={p.id} product={p} />
+                ))
+              )}
+            </div>
+            {rentalRecs.length > HOME_PREVIEW_LIMIT && (
+              <div className="mt-3 flex justify-center">
+                <Button variant="outline" size="sm" asChild>
+                  <Link to="/rent/">View all rental listings</Link>
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Notes preview section */}
+        {!selectedCategory && notesRecs.length > 0 && (
+          <div className="mt-10">
+            <div className="flex items-center justify-between">
+              <div className="text-sm font-semibold">Notes &amp; Study Material</div>
+              <Button variant="ghost" size="sm" asChild>
+                <Link to="/notes">View all</Link>
+              </Button>
+            </div>
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+              {loadingNotes ? (
+                <div className="col-span-full py-8 text-center text-sm text-muted-foreground">Loading…</div>
+              ) : (
+                (notesRecs as unknown as ProductCardModel[]).slice(0, HOME_PREVIEW_LIMIT).map((p) => (
+                  <ProductCard key={p.id} product={p} />
+                ))
+              )}
+            </div>
+            {notesRecs.length > HOME_PREVIEW_LIMIT && (
+              <div className="mt-3 flex justify-center">
+                <Button variant="outline" size="sm" asChild>
+                  <Link to="/notes">View all notes listings</Link>
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="mt-8">
           <RecentlyViewedSection />
@@ -811,10 +812,10 @@ function MarketplaceHome() {
             </div>
           </section>
 
-          {/* Credits Section */}
+          {/* Special Thanks To Section */}
           <section>
-            <h2 className="text-base font-bold">Credits</h2>
-            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <h2 className="text-base font-bold">Special Thanks To</h2>
+            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <div className="flex items-center gap-3 rounded-lg bg-muted/30 px-4 py-3">
                 <Code className="h-5 w-5 flex-shrink-0 text-orange-600" />
                 <span className="text-sm font-medium text-foreground">Chintala Keshav Karthik</span>
@@ -826,6 +827,10 @@ function MarketplaceHome() {
               <div className="flex items-center gap-3 rounded-lg bg-muted/30 px-4 py-3">
                 <Code className="h-5 w-5 flex-shrink-0 text-orange-600" />
                 <span className="text-sm font-medium text-foreground">Sakshi Saraf</span>
+              </div>
+              <div className="flex items-center gap-3 rounded-lg bg-muted/30 px-4 py-3">
+                <Code className="h-5 w-5 flex-shrink-0 text-orange-600" />
+                <span className="text-sm font-medium text-foreground">Tejas Chandane</span>
               </div>
             </div>
           </section>

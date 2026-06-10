@@ -30,6 +30,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarSeparator,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { Badge } from "@/components/ui/badge";
 import { CampusBazarLogo } from "@/components/brand/campusbazar-logo";
@@ -67,6 +68,7 @@ export function AppSidebar() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { data: unreadCount = 0 } = useUnreadNotificationCount(user?.id);
   const { data: unreadChats = 0 } = useUnreadChatCount(user?.id);
+  const { isMobile, setOpenMobile } = useSidebar();
   useNotificationRealtime(user?.id);
 
   const { data: sellerProfile } = useQuery({
@@ -98,11 +100,17 @@ export function AppSidebar() {
   };
 
   const handleSellerProfileClick = () => {
+    if (isMobile) setOpenMobile(false);
     if (sellerProfile?.slug) {
       navigate({ to: "/seller/$slug", params: { slug: sellerProfile.slug } });
     } else {
       navigate({ to: "/seller-profile" });
     }
+  };
+
+  const handleNavigation = (to: string) => {
+    if (isMobile) setOpenMobile(false);
+    navigate({ to });
   };
 
   return (
@@ -139,29 +147,23 @@ export function AppSidebar() {
                     </SidebarMenuButton>
                   ) : (
                     <SidebarMenuButton
-                      asChild
                       isActive={isNavActive(
                         pathname,
                         item.url,
                         "external" in item ? item.external : undefined,
                       )}
+                      onClick={() => handleNavigation(item.url)}
                     >
-                      <Link
-                        to={item.url}
-                        className="flex items-center gap-2"
-                        {...("external" in item && item.external ? { target: "_self" } : {})}
-                      >
-                        <item.icon className="h-4 w-4" />
-                        <span>{item.title}</span>
-                        {"showBadge" in item && item.showBadge && unreadChats > 0 && (
-                          <Badge
-                            variant="destructive"
-                            className="ml-auto h-5 min-w-5 rounded-full px-1.5 text-[10px]"
-                          >
-                            {unreadChats > 99 ? "99+" : unreadChats}
-                          </Badge>
-                        )}
-                      </Link>
+                      <item.icon className="h-4 w-4" />
+                      <span>{item.title}</span>
+                      {"showBadge" in item && item.showBadge && unreadChats > 0 && (
+                        <Badge
+                          variant="destructive"
+                          className="ml-auto h-5 min-w-5 rounded-full px-1.5 text-[10px]"
+                        >
+                          {unreadChats > 99 ? "99+" : unreadChats}
+                        </Badge>
+                      )}
                     </SidebarMenuButton>
                   )}
                 </SidebarMenuItem>
@@ -177,19 +179,20 @@ export function AppSidebar() {
             <SidebarMenu>
               {secondaryItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild isActive={pathname === item.url}>
-                    <Link to={item.url} className="flex items-center gap-2">
-                      <item.icon className="h-4 w-4" />
-                      <span>{item.title}</span>
-                      {"showBadge" in item && item.showBadge && unreadCount > 0 && (
-                        <Badge
-                          variant="destructive"
-                          className="ml-auto h-5 min-w-5 rounded-full px-1.5 text-[10px]"
-                        >
-                          {unreadCount > 99 ? "99+" : unreadCount}
-                        </Badge>
-                      )}
-                    </Link>
+                  <SidebarMenuButton
+                    isActive={pathname === item.url}
+                    onClick={() => handleNavigation(item.url)}
+                  >
+                    <item.icon className="h-4 w-4" />
+                    <span>{item.title}</span>
+                    {"showBadge" in item && item.showBadge && unreadCount > 0 && (
+                      <Badge
+                        variant="destructive"
+                        className="ml-auto h-5 min-w-5 rounded-full px-1.5 text-[10px]"
+                      >
+                        {unreadCount > 99 ? "99+" : unreadCount}
+                      </Badge>
+                    )}
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
@@ -203,11 +206,12 @@ export function AppSidebar() {
             <SidebarGroupContent>
               <SidebarMenu>
                 <SidebarMenuItem>
-                  <SidebarMenuButton asChild isActive={pathname === "/admin"}>
-                    <Link to="/admin" className="flex items-center gap-2">
-                      <Package className="h-4 w-4" />
-                      <span>Admin Portal</span>
-                    </Link>
+                  <SidebarMenuButton
+                    isActive={pathname === "/admin"}
+                    onClick={() => handleNavigation("/admin")}
+                  >
+                    <Package className="h-4 w-4" />
+                    <span>Admin Portal</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               </SidebarMenu>
@@ -219,19 +223,21 @@ export function AppSidebar() {
       <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton asChild isActive={pathname === "/feedback"}>
-              <Link to="/feedback" className="flex items-center gap-2">
-                <MessageCircle className="h-4 w-4" />
-                <span>Give Feedback</span>
-              </Link>
+            <SidebarMenuButton
+              isActive={pathname === "/feedback"}
+              onClick={() => handleNavigation("/feedback")}
+            >
+              <MessageCircle className="h-4 w-4" />
+              <span>Give Feedback</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
-            <SidebarMenuButton asChild isActive={pathname === "/terms"}>
-              <Link to="/terms" className="flex items-center gap-2">
-                <FileText className="h-4 w-4" />
-                <span>Terms &amp; Conditions</span>
-              </Link>
+            <SidebarMenuButton
+              isActive={pathname === "/terms"}
+              onClick={() => handleNavigation("/terms")}
+            >
+              <FileText className="h-4 w-4" />
+              <span>Terms &amp; Conditions</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>

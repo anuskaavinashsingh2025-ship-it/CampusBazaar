@@ -1,6 +1,7 @@
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { Bell, LogOut } from "lucide-react";
 import type { ReactNode } from "react";
+import { useQuery } from "@tanstack/react-query";
 
 import { AppSidebar } from "@/components/app-sidebar";
 import { CampusBazarLogo } from "@/components/brand/campusbazar-logo";
@@ -20,11 +21,12 @@ import {
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { useAuth } from "@/lib/auth";
 import { useNotificationRealtime, useUnreadNotificationCount } from "@/lib/notifications";
+import { supabase } from "@/integrations/supabase/client";
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const { user, profile, signOut } = useAuth();
+  const navigate = useNavigate();
   const { data: unreadCount = 0 } = useUnreadNotificationCount(user?.id);
-  
 
   const initials = (profile?.full_name ?? user?.email ?? "U")
     .split(" ")
@@ -33,9 +35,32 @@ export function AppLayout({ children }: { children: ReactNode }) {
     .slice(0, 2)
     .toUpperCase();
 
+  const { data: sellerProfile } = useQuery({
+    queryKey: ["seller_profile_self", user?.id ?? null],
+    queryFn: async () => {
+      if (!user) return null;
+      const { data, error } = await supabase
+        .from("seller_profiles")
+        .select("slug")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    enabled: Boolean(user?.id),
+  });
+
   const handleSignOut = async () => {
     await signOut();
     window.location.href = "/login";
+  };
+
+  const handleSellerProfileClick = () => {
+    if (sellerProfile?.slug) {
+      navigate({ to: "/seller/$slug", params: { slug: sellerProfile.slug } });
+    } else {
+      navigate({ to: "/seller-profile" });
+    }
   };
 
   return (
@@ -96,8 +121,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
                     <DropdownMenuItem asChild>
                       <Link to="/profile">User profile</Link>
                     </DropdownMenuItem>
-                    <DropdownMenuItem asChild>
-                      <Link to="/seller-profile">Seller profile</Link>
+                    <DropdownMenuItem onClick={handleSellerProfileClick}>
+                      Seller profile
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={handleSignOut} className="text-destructive">

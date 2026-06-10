@@ -11,8 +11,11 @@ import { isChatUnlockedForFoodOrder } from "@/lib/food-orders";
 import { isChatUnlockedForNotesPurchase } from "@/lib/notes-purchase-requests";
 import { checkBanStatus } from "@/lib/ban-enforcement";
 
+// Re-export getDaysUntilDeletion so consumers can import from a single place
+export { getDaysUntilDeletion } from "@/lib/chat-inactivity";
+
 export type ChatContextType = "product" | "rental" | "food" | "notes";
-export type ConversationStatus = "active" | "archived" | "reported" | "completed";
+export type ConversationStatus = "active" | "archived" | "reported" | "completed" | "auto_archived" | "completion_pending";
 export type MessageType = "text" | "image";
 export type MessageDeliveryStatus = "sent" | "delivered" | "read";
 export type ChatReportTarget = "user" | "conversation" | "listing";
@@ -42,6 +45,9 @@ export type ConversationRow = {
   seller_unread_count: number;
   completed_at: string | null;
   archived_at: string | null;
+  archive_reason: string | null;
+  completion_requested_by: string | null;
+  completion_requested_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -110,7 +116,7 @@ export function invalidateChatQueries(queryClient: QueryClient) {
 
 export function classifyConversationSection(conv: ConversationRow, _userId: string): ChatSection {
   if (conv.is_reported || conv.status === "reported") return "reported";
-  if (conv.status === "archived" || conv.status === "completed") return "archived";
+  if (conv.status === "archived" || conv.status === "completed" || conv.status === "auto_archived") return "archived";
   if (conv.status === "active" && !conv.last_message_at) return "request";
   if (conv.context_type === "rental" && conv.status === "active") return "rental";
   return "active";
@@ -823,6 +829,8 @@ export function useCompleteConversation(userId: string | null | undefined) {
         .update({
           status: "completed",
           completed_at: new Date().toISOString(),
+          archived_at: new Date().toISOString(),
+          archive_reason: "Transaction completed",
         })
         .eq("id", conversationId);
       if (error) throw error;
@@ -830,6 +838,93 @@ export function useCompleteConversation(userId: string | null | undefined) {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: conversationsQueryKey(userId ?? null) });
       toast.success("Transaction marked complete");
+    },
+  });
+}
+
+export function useRequestConversationCompletion(userId: string | null | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (conversationId: string) => {
+      const { error } = await supabase
+        .from(CONVERSATIONS_TABLE)
+        .update({
+          status: "completion_pending",
+          completion_requested_by: userId,
+          completion_requested_at: new Date().toISOString(),
+        })
+        .eq("id", conversationId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: conversationsQueryKey(userId ?? null) });
+      toast.success("Completion requested. Waiting for confirmation.");
+    },
+  });
+}
+
+export function useConfirmConversationCompletion(userId: string | null | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (conversationId: string) => {
+      const { error } = await supabase
+        .from(CONVERSATIONS_TABLE)
+        .update({
+          status: "completed",
+          completed_at: new Date().toISOString(),
+          archived_at: new Date().toISOString(),
+          archive_reason: "Both participants confirmed completion",
+          completion_requested_by: null,
+          completion_requested_at: null,
+        })
+        .eq("id", conversationId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: conversationsQueryKey(userId ?? null) });
+      toast.success("Transaction completed");
+    },
+  });
+}
+
+export function useWithdrawCompletionRequest(userId: string | null | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (conversationId: string) => {
+      const { error } = await supabase
+        .from(CONVERSATIONS_TABLE)
+        .update({
+          status: "active",
+          completion_requested_by: null,
+          completion_requested_at: null,
+        })
+        .eq("id", conversationId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: conversationsQueryKey(userId ?? null) });
+      toast.success("Completion request withdrawn");
+    },
+  });
+}
+
+export function useReopenArchivedChat(userId: string | null | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (conversationId: string) => {
+      const { error } = await supabase
+        .from(CONVERSATIONS_TABLE)
+        .update({
+          status: "active",
+          archived_at: null,
+          archive_reason: null,
+        })
+        .eq("id", conversationId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: conversationsQueryKey(userId ?? null) });
+      toast.success("Chat reopened");
     },
   });
 }
@@ -998,6 +1093,66 @@ export async function ensureConversationOnAccept(input: {
   return conversationId;
 }
 
+export async function requestConversationCompletion(input: {
+  conversationId: string;
+  userId: string;
+}) {
+  const { error } = await supabase
+    .from(CONVERSATIONS_TABLE)
+    .update({
+      status: "completion_pending",
+      completion_requested_by: input.userId,
+      completion_requested_at: new Date().toISOString(),
+    })
+    .eq("id", input.conversationId);
+  if (error) throw error;
+}
+
+export async function confirmConversationCompletion(input: {
+  conversationId: string;
+}) {
+  const { error } = await supabase
+    .from(CONVERSATIONS_TABLE)
+    .update({
+      status: "completed",
+      completed_at: new Date().toISOString(),
+      archived_at: new Date().toISOString(),
+      archive_reason: "Both participants confirmed completion",
+      completion_requested_by: null,
+      completion_requested_at: null,
+    })
+    .eq("id", input.conversationId);
+  if (error) throw error;
+}
+
+export async function withdrawCompletionRequest(input: {
+  conversationId: string;
+}) {
+  const { error } = await supabase
+    .from(CONVERSATIONS_TABLE)
+    .update({
+      status: "active",
+      completion_requested_by: null,
+      completion_requested_at: null,
+    })
+    .eq("id", input.conversationId);
+  if (error) throw error;
+}
+
+export async function reopenArchivedChat(input: {
+  conversationId: string;
+}) {
+  const { error } = await supabase
+    .from(CONVERSATIONS_TABLE)
+    .update({
+      status: "active",
+      archived_at: null,
+      archive_reason: null,
+    })
+    .eq("id", input.conversationId);
+  if (error) throw error;
+}
+
 export async function completeConversationForRequest(input: {
   buyerId: string;
   contextType: ChatContextType;
@@ -1008,11 +1163,33 @@ export async function completeConversationForRequest(input: {
     .update({
       status: "completed",
       completed_at: new Date().toISOString(),
+      archived_at: new Date().toISOString(),
+      archive_reason: "Transaction completed",
     })
     .eq("buyer_id", input.buyerId)
     .eq("context_type", input.contextType)
     .eq("context_id", input.contextId);
   if (error) throw error;
+}
+
+export async function fetchRentalRequestStatus(conversation: ConversationRow): Promise<string | null> {
+  if (conversation.context_type === "rental" && conversation.request_id) {
+    const { data } = await supabase
+      .from("rental_requests" as unknown as keyof Database["public"]["Tables"])
+      .select("status")
+      .eq("id", conversation.request_id)
+      .maybeSingle();
+    return (data as { status: string } | null)?.status ?? null;
+  }
+  if (conversation.context_type === "notes" && conversation.request_id) {
+    const { data } = await supabase
+      .from("notes_purchase_requests" as unknown as keyof Database["public"]["Tables"])
+      .select("status")
+      .eq("id", conversation.request_id)
+      .maybeSingle();
+    return (data as { status: string } | null)?.status ?? null;
+  }
+  return null;
 }
 
 export function filterConversationsBySection(

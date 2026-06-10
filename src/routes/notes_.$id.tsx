@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Loader2, ShoppingCart } from "lucide-react";
+import { ArrowLeft, Loader2, ShoppingCart, RotateCcw, Clock, DollarSign } from "lucide-react";
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -13,6 +13,14 @@ import {
   useCreateNotesPurchase,
   useNotesPurchaseForListing,
 } from "@/lib/notes-purchase-requests";
+import {
+  isChatUnlockedForNotesRental,
+  useCreateNotesRental,
+  useNotesRentalForListing,
+  useUpdateNotesRental,
+  parseRentalDurationFromMessage,
+  type NotesRentalStatus,
+} from "@/lib/notes-rental-requests";
 import { getStoragePublicUrl } from "@/lib/storage-url";
 import { WishlistButton } from "@/components/wishlist/wishlist-button";
 import { ChatSellerButton } from "@/components/listing/chat-seller-button";
@@ -79,7 +87,10 @@ function NotesDetailsPage() {
   const { user } = useAuth();
   const { id } = Route.useParams();
   const createPurchase = useCreateNotesPurchase();
-  const { data: existingRequest } = useNotesPurchaseForListing(id, user?.id);
+  const { data: existingPurchaseRequest } = useNotesPurchaseForListing(id, user?.id);
+  const createRental = useCreateNotesRental();
+  const updateRental = useUpdateNotesRental();
+  const { data: existingRentalRequest } = useNotesRentalForListing(id, user?.id);
 
   const [requestOpen, setRequestOpen] = useState(false);
   const [requestMessage, setRequestMessage] = useState("");
@@ -164,7 +175,6 @@ function NotesDetailsPage() {
       : null,
   );
 
-  const chatUnlocked = isChatUnlockedForNotesPurchase(existingRequest?.status);
 
   const openRequest = () => {
     if (!user) {
@@ -172,38 +182,104 @@ function NotesDetailsPage() {
       return;
     }
     if (listing && user.id === listing.seller_id) {
-      toast.error("You can't buy your own notes.");
+      toast.error(listing.listing_type === "rent" ? "You can't rent your own notes." : "You can't buy your own notes.");
       return;
     }
     setRequestOpen(true);
   };
 
+  const handleReturnNotes = () => {
+    if (!existingRequest) return;
+    updateRental.mutate(
+      {
+        requestId: existingRequest.id,
+        status: "returned",
+        notifyUserId: listing.seller_id,
+        notificationTitle: "Notes Returned",
+        notificationDescription: "The renter has returned the notes. Please review and mark as available or keep unavailable.",
+      },
+      {
+        onSuccess: () => {
+          toast.success("Notes returned successfully");
+        },
+      },
+    );
+  };
+
+  const handleMarkAvailableAgain = () => {
+    if (!existingRequest) return;
+    updateRental.mutate(
+      {
+        requestId: existingRequest.id,
+        status: "completed",
+        notifyUserId: existingRequest.buyer_id,
+        notificationTitle: "Rental Completed",
+        notificationDescription: "The notes have been marked as available again.",
+        listingStatus: "available",
+      },
+      {
+        onSuccess: () => {
+          toast.success("Notes marked as available again");
+        },
+      },
+    );
+  };
+
+  const handleKeepUnavailable = () => {
+    if (!existingRequest) return;
+    updateRental.mutate(
+      {
+        requestId: existingRequest.id,
+        status: "completed",
+        notifyUserId: existingRequest.buyer_id,
+        notificationTitle: "Rental Completed",
+        notificationDescription: "The rental has been completed. Notes remain unavailable.",
+        listingStatus: "unavailable",
+      },
+      {
+        onSuccess: () => {
+          toast.success("Rental completed");
+        },
+      },
+    );
+  };
+
   const submitRequest = () => {
     if (!user || !listing) return;
 
-    let message = requestMessage.trim();
     if (listing.listing_type === "rent") {
       const days = Number(rentalDurationDays);
       if (!days || days < 1) {
         toast.error("Enter a valid rental duration.");
         return;
       }
-      const durationLine = `Rental Duration: ${days} day${days === 1 ? "" : "s"}`;
-      message = message ? `${durationLine}\n${message}` : durationLine;
+      createRental.mutate(
+        {
+          notesListingId: listing.id,
+          buyerId: user.id,
+          sellerId: listing.seller_id,
+          listingTitle: listing.title,
+          rentalDurationDays: days,
+          message: requestMessage.trim(),
+          buyerName: user.user_metadata?.full_name || user.email?.split("@")[0] || "Buyer",
+          buyerHostel: user.user_metadata?.hostel_block || null,
+        },
+        { onSuccess: () => setRequestOpen(false) },
+      );
+    } else {
+      createPurchase.mutate(
+        {
+          notesListingId: listing.id,
+          buyerId: user.id,
+          sellerId: listing.seller_id,
+          listingTitle: listing.title,
+          message: requestMessage.trim(),
+          buyerName: user.user_metadata?.full_name || user.email?.split("@")[0] || "Buyer",
+          buyerHostel: user.user_metadata?.hostel_block || null,
+        },
+        { onSuccess: () => setRequestOpen(false) },
+      );
     }
-
-    createPurchase.mutate(
-      {
-        notesListingId: listing.id,
-        buyerId: user.id,
-        sellerId: listing.seller_id,
-        listingTitle: listing.title,
-        message,
-        buyerName: user.user_metadata?.full_name || user.email?.split("@")[0] || "Buyer",
-        buyerHostel: user.user_metadata?.hostel_block || null,
-      },
-      { onSuccess: () => setRequestOpen(false) },
-    );
   };
 
   if (isLoading) {
@@ -236,7 +312,42 @@ function NotesDetailsPage() {
     );
   }
 
-  const buyLabel = listing.listing_type === "sell" ? "Buy Notes" : "Request Notes";
+  const buyLabel = listing.listing_type === "sell" ? "Buy Notes" : "Rent Notes";
+
+  // Determine which request to use based on listing type
+  const existingRequest = listing.listing_type === "rent" ? existingRentalRequest : existingPurchaseRequest;
+  const requestStatus = existingRequest?.status as NotesRentalStatus | undefined;
+  const chatUnlocked = listing.listing_type === "rent"
+    ? isChatUnlockedForNotesRental(requestStatus)
+    : isChatUnlockedForNotesPurchase(existingPurchaseRequest?.status);
+
+  // Parse rental duration from existing request message
+  const existingRentalDuration = requestStatus
+    ? parseRentalDurationFromMessage(existingRequest?.message ?? null)
+    : null;
+
+  // Get rental status label and color
+  const getRentalStatusInfo = (status: NotesRentalStatus | undefined) => {
+    if (!status) return null;
+    switch (status) {
+      case "pending":
+        return { label: "Pending", className: "bg-yellow-500 text-white" };
+      case "accepted":
+        return { label: "Accepted", className: "bg-blue-500 text-white" };
+      case "rejected":
+        return { label: "Rejected", className: "bg-red-500 text-white" };
+      case "active_rental":
+        return { label: "Active Rental", className: "bg-green-500 text-white" };
+      case "returned":
+        return { label: "Returned", className: "bg-orange-500 text-white" };
+      case "completed":
+        return { label: "Completed", className: "bg-slate-500 text-white" };
+      default:
+        return { label: status, className: "bg-gray-500 text-white" };
+    }
+  };
+
+  const rentalStatusInfo = getRentalStatusInfo(requestStatus);
 
   return (
     <div className="min-h-screen bg-background pb-24">
@@ -276,14 +387,11 @@ function NotesDetailsPage() {
                   Posted {new Date(listing.created_at).toLocaleDateString()}
                 </p>
                 <p className="mt-1 text-lg font-bold text-primary">{priceLabel}</p>
-                <div className="mt-2">
-                  <ListingStats
-                    viewsCount={listing.views_count ?? 0}
-                    wishlistCount={listing.wishlist_count ?? 0}
-                  />
-                </div>
               </div>
               <Badge variant="secondary">{listing.listing_type === "sell" ? "Sell" : "Rent"}</Badge>
+              {listing.listing_type === "rent" && rentalStatusInfo && (
+                <Badge className={rentalStatusInfo.className}>{rentalStatusInfo.label}</Badge>
+              )}
             </div>
 
             <div className="flex flex-wrap gap-2">
@@ -298,6 +406,46 @@ function NotesDetailsPage() {
                 <Badge variant="outline">Physical</Badge>
               )}
             </div>
+
+            {listing.listing_type === "rent" && (
+              <div className="rounded-xl border bg-card p-4">
+                <div className="text-sm font-semibold text-muted-foreground">Rental Information</div>
+                <div className="mt-3 space-y-2">
+                  <div className="flex items-center gap-2 text-sm">
+                    <DollarSign className="h-4 w-4 text-muted-foreground" />
+                    <span className="font-medium">Daily Price:</span>
+                    <span className="text-primary font-semibold">
+                      {listing.daily_rental_price != null ? formatInr(Number(listing.daily_rental_price)) : "—"}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm">
+                    <Clock className="h-4 w-4 text-muted-foreground" />
+                    <span className="font-medium">Max Duration:</span>
+                    <span>{listing.rental_duration_days ? `${listing.rental_duration_days} days` : "—"}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className="font-medium">Condition:</span>
+                    <span>{listing.condition || "—"}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className="font-medium">Availability:</span>
+                    <Badge
+                      variant={listing.status === "available" ? "default" : "secondary"}
+                      className="text-xs"
+                    >
+                      {listing.status === "available" ? "Available" : listing.status}
+                    </Badge>
+                  </div>
+                  {existingRentalDuration && (
+                    <div className="flex items-center gap-2 text-sm">
+                      <Clock className="h-4 w-4 text-muted-foreground" />
+                      <span className="font-medium">Requested Duration:</span>
+                      <span>{existingRentalDuration} days</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             <div className="rounded-xl border bg-card p-4">
               <div className="text-sm font-semibold text-muted-foreground">Description</div>
@@ -336,14 +484,45 @@ function NotesDetailsPage() {
                 requestId={existingRequest?.id}
                 className="w-full gap-2"
               />
-              <Button
-                className="gap-2"
-                onClick={openRequest}
-                disabled={existingRequest?.status === "pending"}
-              >
-                <ShoppingCart className="h-4 w-4" />
-                {existingRequest?.status === "pending" ? "Request Pending" : buyLabel}
-              </Button>
+              {listing.listing_type === "rent" && requestStatus === "active_rental" && user?.id === existingRequest?.buyer_id ? (
+                <Button
+                  className="gap-2"
+                  onClick={handleReturnNotes}
+                  disabled={updateRental.isPending}
+                >
+                  <RotateCcw className="h-4 w-4" />
+                  {updateRental.isPending ? "Returning..." : "Return Notes"}
+                </Button>
+              ) : listing.listing_type === "rent" && requestStatus === "returned" && user?.id === listing.seller_id ? (
+                <div className="flex gap-2">
+                  <Button
+                    className="gap-2"
+                    onClick={handleMarkAvailableAgain}
+                    disabled={updateRental.isPending}
+                  >
+                    Mark Available Again
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="gap-2"
+                    onClick={handleKeepUnavailable}
+                    disabled={updateRental.isPending}
+                  >
+                    Keep Unavailable
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  className="gap-2"
+                  onClick={openRequest}
+                  disabled={requestStatus === "pending" || requestStatus === "active_rental" || requestStatus === "returned"}
+                >
+                  <ShoppingCart className="h-4 w-4" />
+                  {requestStatus === "pending" || requestStatus === "active_rental" || requestStatus === "returned"
+                    ? "Request Pending"
+                    : buyLabel}
+                </Button>
+              )}
             </div>
           </div>
         </div>
@@ -355,9 +534,11 @@ function NotesDetailsPage() {
       <Dialog open={requestOpen} onOpenChange={setRequestOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{buyLabel}</DialogTitle>
+            <DialogTitle>{listing.listing_type === "rent" ? "Rent Notes" : "Buy Notes"}</DialogTitle>
             <DialogDescription>
-              Send a request to {seller?.display_name ?? "the seller"} for these notes.
+              {listing.listing_type === "rent"
+                ? `Send a rental request to ${seller?.display_name ?? "the seller"} for these notes.`
+                : `Send a purchase request to ${seller?.display_name ?? "the seller"} for these notes.`}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -368,9 +549,16 @@ function NotesDetailsPage() {
                   id="notesDuration"
                   type="number"
                   min={1}
+                  max={listing.rental_duration_days || undefined}
                   value={rentalDurationDays}
                   onChange={(e) => setRentalDurationDays(e.target.value)}
+                  placeholder={listing.rental_duration_days ? `Max ${listing.rental_duration_days} days` : "Enter duration"}
                 />
+                {listing.rental_duration_days && (
+                  <p className="text-xs text-muted-foreground">
+                    Maximum rental duration: {listing.rental_duration_days} days
+                  </p>
+                )}
               </div>
             )}
             <div className="space-y-2">
@@ -387,8 +575,8 @@ function NotesDetailsPage() {
             <Button variant="outline" onClick={() => setRequestOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={submitRequest} disabled={createPurchase.isPending}>
-              Send Request
+            <Button onClick={submitRequest} disabled={createPurchase.isPending || createRental.isPending}>
+              {listing.listing_type === "rent" ? "Send Rental Request" : "Send Request"}
             </Button>
           </DialogFooter>
         </DialogContent>

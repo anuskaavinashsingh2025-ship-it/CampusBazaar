@@ -885,30 +885,10 @@ function UploadProductPage() {
                 ))}
               </CardContent>
             </Card>
-
-            <Card className="shadow-none">
-              <CardContent className="flex items-center justify-between gap-3 p-4">
-                <div>
-                  <p className="font-medium">Need help?</p>
-                  <p className="text-xs text-muted-foreground">Read our selling guide</p>
-                </div>
-                <Button variant="outline" size="sm" asChild>
-                  <Link to="/">View guide</Link>
-                </Button>
-              </CardContent>
-            </Card>
           </aside>
         </div>
 
-        <div className="sticky bottom-0 mt-8 flex flex-col gap-3 border-t bg-background/95 py-4 backdrop-blur sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm text-muted-foreground">
-            Got something to sell? List it in minutes...
-          </p>
-          <Button variant="secondary" disabled={savingDraft} onClick={() => void handleSaveDraft()}>
-            {savingDraft ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-            Save Draft
-          </Button>
-        </div>
+
       </div>
     </div>
   );

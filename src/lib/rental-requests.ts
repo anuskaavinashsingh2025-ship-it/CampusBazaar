@@ -23,6 +23,8 @@ import { enforceBanCheck } from "@/lib/ban-enforcement";
 export type RentalRequestStatus =
   | "pending"
   | "accepted"
+  | "active_rental"
+  | "return_requested"
   | "rejected"
   | "returned"
   | "completed"
@@ -280,7 +282,7 @@ export function useCreateRentalRequest() {
 }
 
 export function isChatUnlockedForRentalRequest(status: RentalRequestStatus | undefined) {
-  return status === "accepted" || status === "returned" || status === "completed";
+  return status === "accepted" || status === "active_rental" || status === "return_requested" || status === "returned" || status === "completed";
 }
 
 export function useUpdateRentalRequest() {
@@ -312,17 +314,24 @@ export function useUpdateRentalRequest() {
       console.log("[useUpdateRentalRequest] Status updated to:", input.status);
 
       if (input.listingStatus && input.rentalId) {
+        const isAvailable = input.listingStatus === "available";
+        const isRented = input.listingStatus === "rented_out";
         const { error: listingErr } = await supabase
           .from(RENTALS_TABLE)
-          .update({ status: input.listingStatus })
+          .update({ is_available: isAvailable, is_rented: isRented })
           .eq("id", input.rentalId);
-        if (listingErr) throw listingErr;
+        if (listingErr) {
+          console.error("[useUpdateRentalRequest] Listing update error:", listingErr);
+          throw listingErr;
+        }
+        console.log("[useUpdateRentalRequest] Listing updated:", { isAvailable, isRented });
       }
 
       if (
         input.status === "accepted" ||
         input.status === "completed" ||
-        input.status === "rejected"
+        input.status === "rejected" ||
+        input.status === "active_rental"
       ) {
         console.log("[useUpdateRentalRequest] Status is accepted/completed, fetching request row");
         const { data: reqRow } = await supabase
@@ -345,7 +354,7 @@ export function useUpdateRentalRequest() {
 
           console.log("[useUpdateRentalRequest] Rental title:", title);
 
-          if (input.status === "accepted") {
+          if (input.status === "accepted" || input.status === "active_rental") {
             console.log("[useUpdateRentalRequest] Calling ensureConversationOnAccept");
             conversationId = await ensureConversationOnAccept({
               buyerId: row.buyer_id,

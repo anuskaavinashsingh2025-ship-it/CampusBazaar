@@ -291,12 +291,6 @@ function ProductDetailsPage() {
                 Posted {new Date(product.created_at).toLocaleDateString()}
               </p>
               <div className="mt-2 text-2xl font-bold text-primary">{priceLabel}</div>
-              <div className="mt-2">
-                <ListingStats
-                  viewsCount={product.views_count ?? 0}
-                  wishlistCount={product.wishlist_count ?? 0}
-                />
-              </div>
             </div>
 
             <div className="flex flex-wrap gap-2">

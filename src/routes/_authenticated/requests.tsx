@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useCallback, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 import { useAuth } from "@/lib/auth";
 import {
@@ -29,6 +30,14 @@ import {
   useUpdateNotesPurchase,
   type NotesPurchaseRow,
 } from "@/lib/notes-purchase-requests";
+import {
+  useBuyerNotesRentals,
+  useSellerNotesRentals,
+  useUpdateNotesRental,
+  parseRentalDurationFromMessage,
+  type NotesRentalRow,
+  type NotesRentalStatus,
+} from "@/lib/notes-rental-requests";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -63,6 +72,8 @@ export const Route = createFileRoute("/_authenticated/requests")({
 const STATUS_STYLES: Record<string, string> = {
   pending: "bg-yellow-100 text-yellow-800",
   accepted: "bg-emerald-100 text-emerald-800",
+  active_rental: "bg-green-100 text-green-800",
+  return_requested: "bg-orange-100 text-orange-800",
   rejected: "bg-red-100 text-red-800",
   returned: "bg-blue-100 text-blue-800",
   completed: "bg-slate-100 text-slate-700",
@@ -113,14 +124,18 @@ function RequestsPage() {
 
       <RoleToggle view={role} onChange={setRole} />
 
-      <Tabs defaultValue="products">
+      <Tabs defaultValue="all">
         <TabsList className="w-full justify-start">
+          <TabsTrigger value="all">All</TabsTrigger>
           <TabsTrigger value="products">Products</TabsTrigger>
           <TabsTrigger value="rentals">Rentals</TabsTrigger>
           <TabsTrigger value="food">Food</TabsTrigger>
           <TabsTrigger value="notes">Notes</TabsTrigger>
         </TabsList>
 
+        <TabsContent value="all" className="mt-4">
+          <AllRequestsTab userId={user?.id} role={role} formatInr={formatInr} />
+        </TabsContent>
         <TabsContent value="products" className="mt-4">
           <ProductRequestsTab userId={user?.id} role={role} formatInr={formatInr} />
         </TabsContent>
@@ -134,6 +149,185 @@ function RequestsPage() {
           <NotesRequestsTab userId={user?.id} role={role} />
         </TabsContent>
       </Tabs>
+    </div>
+  );
+}
+
+function AllRequestsTab({
+  userId,
+  role,
+  formatInr,
+}: {
+  userId: string | undefined;
+  role: "seller" | "buyer";
+  formatInr: (n: number) => string;
+}) {
+  // Fetch all request types in parallel
+  const { data: sellerProductReqs = [], isLoading: lsp } = useSellerProductRequests(
+    role === "seller" ? userId : undefined,
+  );
+  const { data: buyerProductReqs = [], isLoading: lbp } = useBuyerProductRequests(
+    role === "buyer" ? userId : undefined,
+  );
+  const { data: sellerRentalReqs = [], isLoading: lsr } = useSellerRentalRequests(
+    role === "seller" ? userId : undefined,
+  );
+  const { data: buyerRentalReqs = [], isLoading: lbr } = useBuyerRentalRequests(
+    role === "buyer" ? userId : undefined,
+  );
+  const { data: sellerFoodOrders = [], isLoading: lsf } = useSellerFoodOrders(
+    role === "seller" ? userId : undefined,
+  );
+  const { data: buyerFoodOrders = [], isLoading: lbf } = useBuyerFoodOrders(
+    role === "buyer" ? userId : undefined,
+  );
+  const { data: sellerPurchaseReqs = [], isLoading: lsnp } = useSellerNotesPurchases(
+    role === "seller" ? userId : undefined,
+  );
+  const { data: buyerPurchaseReqs = [], isLoading: lbnp } = useBuyerNotesPurchases(
+    role === "buyer" ? userId : undefined,
+  );
+  const { data: sellerNotesRentals = [], isLoading: lsnr } = useSellerNotesRentals(
+    role === "seller" ? userId : undefined,
+  );
+  const { data: buyerNotesRentals = [], isLoading: lbnr } = useBuyerNotesRentals(
+    role === "buyer" ? userId : undefined,
+  );
+
+  const isLoading =
+    (role === "seller" ? lsp : lbp) ||
+    (role === "seller" ? lsr : lbr) ||
+    (role === "seller" ? lsf : lbf) ||
+    (role === "seller" ? lsnp : lbnp) ||
+    (role === "seller" ? lsnr : lbnr);
+
+  const productRequests = role === "seller" ? sellerProductReqs : buyerProductReqs;
+  const rentalRequests = role === "seller" ? sellerRentalReqs : buyerRentalReqs;
+  const foodOrders = role === "seller" ? sellerFoodOrders : buyerFoodOrders;
+  const notesPurchases = role === "seller" ? sellerPurchaseReqs : buyerPurchaseReqs;
+  const notesRentals = role === "seller" ? sellerNotesRentals : buyerNotesRentals;
+
+  const totalCount =
+    productRequests.length +
+    rentalRequests.length +
+    foodOrders.length +
+    notesPurchases.length +
+    notesRentals.length;
+
+  if (isLoading) return <LoadingState />;
+  if (totalCount === 0) return <EmptyState label="any" />;
+
+  return (
+    <div className="space-y-6">
+      {productRequests.length > 0 && (
+        <section>
+          <div className="mb-3 flex items-center gap-2">
+            <Badge variant="secondary" className="text-xs">Products</Badge>
+            <span className="text-sm text-muted-foreground">{productRequests.length} request{productRequests.length !== 1 ? "s" : ""}</span>
+          </div>
+          <div className="space-y-4">
+            {productRequests.map((req) => (
+              <RequestCard
+                key={req.id}
+                title={req.product?.title ?? "Product"}
+                status={req.status}
+                price={
+                  req.request_type === "offer" && req.offered_price != null
+                    ? `Offer: ${formatInr(req.offered_price)}`
+                    : req.product
+                      ? formatInr(req.product.price)
+                      : undefined
+                }
+                coverUrl={req.product?.coverUrl}
+                counterparty={role === "seller" ? req.buyer : req.seller}
+                counterpartyLabel={role === "seller" ? "Buyer" : "Seller"}
+                message={req.message ?? undefined}
+                extra={`Product · ${req.request_type === "offer" ? "Offer" : "Buy Now"}`}
+                actions={null}
+              />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {rentalRequests.length > 0 && (
+        <section>
+          <div className="mb-3 flex items-center gap-2">
+            <Badge variant="secondary" className="text-xs">Rentals</Badge>
+            <span className="text-sm text-muted-foreground">{rentalRequests.length} request{rentalRequests.length !== 1 ? "s" : ""}</span>
+          </div>
+          <div className="space-y-4">
+            {rentalRequests.map((req) => (
+              <RequestCard
+                key={req.id}
+                title={req.rental?.title ?? "Rental"}
+                status={req.status}
+                price={req.rental ? `${formatInr(req.rental.rent_price_per_day)} / day` : undefined}
+                coverUrl={req.rental?.coverUrl}
+                counterparty={role === "seller" ? req.buyer : req.seller}
+                counterpartyLabel={role === "seller" ? "Requester" : "Seller"}
+                message={req.message ?? undefined}
+                extra="Rental"
+                actions={null}
+              />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {foodOrders.length > 0 && (
+        <section>
+          <div className="mb-3 flex items-center gap-2">
+            <Badge variant="secondary" className="text-xs">Food</Badge>
+            <span className="text-sm text-muted-foreground">{foodOrders.length} order{foodOrders.length !== 1 ? "s" : ""}</span>
+          </div>
+          <div className="space-y-4">
+            {foodOrders.map((order) => (
+              <RequestCard
+                key={order.id}
+                title={`Food order · Qty ${order.quantity}`}
+                status={order.status}
+                message={order.message ?? undefined}
+                extra="Food Order"
+                actions={null}
+              />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {(notesPurchases.length > 0 || notesRentals.length > 0) && (
+        <section>
+          <div className="mb-3 flex items-center gap-2">
+            <Badge variant="secondary" className="text-xs">Notes</Badge>
+            <span className="text-sm text-muted-foreground">
+              {notesPurchases.length + notesRentals.length} request{notesPurchases.length + notesRentals.length !== 1 ? "s" : ""}
+            </span>
+          </div>
+          <div className="space-y-4">
+            {notesPurchases.map((req) => (
+              <RequestCard
+                key={req.id}
+                title="Notes purchase request"
+                status={req.status}
+                message={req.message ?? undefined}
+                extra="Notes · Purchase"
+                actions={null}
+              />
+            ))}
+            {notesRentals.map((req) => (
+              <RequestCard
+                key={req.id}
+                title="Notes rental request"
+                status={req.status}
+                message={req.message ?? undefined}
+                extra="Notes · Rental"
+                actions={null}
+              />
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }
@@ -296,6 +490,8 @@ function RentalRequestsTab({
   const openChat = useOpenChatOnAccept();
   const requests = role === "seller" ? sellerReqs : buyerReqs;
   const isLoading = role === "seller" ? ls : lb;
+  const [completionModalOpen, setCompletionModalOpen] = useState(false);
+  const [selectedRequest, setSelectedRequest] = useState<RentalRequestDetails | null>(null);
 
   const handleAccept = (req: RentalRequestDetails) => {
     update.mutate(
@@ -342,58 +538,343 @@ function RentalRequestsTab({
     );
   };
 
+  const handleMarkAsRentedOut = (req: RentalRequestDetails) => {
+    update.mutate(
+      {
+        requestId: req.id,
+        status: "active_rental",
+        rentalId: req.rental_id,
+        listingStatus: "rented_out",
+        notifyUserId: req.buyer_id,
+        notificationTitle: "Rental Started",
+        notificationDescription: `Your rental of "${req.rental?.title ?? "the item"}" has started.`,
+      },
+      { onSuccess: () => toast.success("Marked as rented out") },
+    );
+  };
+
+  const handleReturnItem = (req: RentalRequestDetails) => {
+    update.mutate(
+      {
+        requestId: req.id,
+        status: "return_requested",
+        rentalId: req.rental_id,
+        notifyUserId: req.seller_id,
+        notificationTitle: "Item Returned",
+        notificationDescription: `The renter has returned "${req.rental?.title ?? "the item"}". Please confirm.`,
+      },
+      { onSuccess: () => toast.success("Return requested") },
+    );
+  };
+
+  const handleConfirmReturn = (req: RentalRequestDetails) => {
+    setSelectedRequest(req);
+    setCompletionModalOpen(true);
+  };
+
+  const handleCompletionChoice = (listingStatus: "available" | "unavailable") => {
+    if (!selectedRequest) return;
+    update.mutate(
+      {
+        requestId: selectedRequest.id,
+        status: "completed",
+        rentalId: selectedRequest.rental_id,
+        listingStatus,
+        notifyUserId: selectedRequest.buyer_id,
+        notificationTitle: "Return Confirmed",
+        notificationDescription: `Your return of "${selectedRequest.rental?.title ?? "the item"}" has been confirmed.`,
+      },
+      {
+        onSuccess: () => {
+          toast.success(listingStatus === "available" ? "Marked as available again" : "Kept unavailable");
+          setCompletionModalOpen(false);
+          setSelectedRequest(null);
+        },
+      },
+    );
+  };
+
   if (isLoading) return <LoadingState />;
   if (!requests.length) return <EmptyState label="rental" />;
 
+  const pendingRequests = requests.filter((r) => r.status === "pending");
+  const acceptedRequests = requests.filter((r) => r.status === "accepted");
+  const activeRentals = requests.filter((r) => r.status === "active_rental");
+  const pendingReturns = requests.filter((r) => r.status === "return_requested");
+  const completedRentals = requests.filter((r) => r.status === "completed");
+  const otherRequests = requests.filter((r) => !["pending", "accepted", "active_rental", "return_requested", "completed"].includes(r.status));
+
   return (
-    <div className="space-y-4">
-      {requests.map((req) => {
-        const parsed = parseRentalRequestMessage(req.message);
-        return (
-          <RequestCard
-            key={req.id}
-            title={req.rental?.title ?? "Rental"}
-            status={req.status}
-            price={req.rental ? `${formatInr(req.rental.rent_price_per_day)} / day` : undefined}
-            coverUrl={req.rental?.coverUrl}
-            counterparty={role === "seller" ? req.buyer : req.seller}
-            counterpartyLabel={role === "seller" ? "Requester" : "Seller"}
-            message={parsed.personalMessage || undefined}
-            extra={
-              [parsed.duration, parsed.pickupDate, parsed.pickupLocation]
-                .filter(Boolean)
-                .join(" · ") || undefined
-            }
-            actions={
-              <>
-                {role === "seller" && req.status === "pending" && (
-                  <div className="flex gap-2">
-                    <Button
-                      className="flex-1 bg-emerald-600 hover:bg-emerald-700"
-                      onClick={() => handleAccept(req)}
-                    >
-                      Accept
-                    </Button>
-                    <Button
-                      variant="destructive"
-                      className="flex-1"
-                      onClick={() => handleReject(req)}
-                    >
-                      Reject
-                    </Button>
-                  </div>
-                )}
-                {req.status === "pending" && (
-                  <Button variant="outline" className="w-full" onClick={() => handleCancel(req)}>
-                    Cancel Request
-                  </Button>
-                )}
-              </>
-            }
-          />
-        );
-      })}
-    </div>
+    <>
+      {pendingRequests.length > 0 && (
+        <div>
+          <h3 className="mb-3 text-sm font-semibold">Pending Requests ({pendingRequests.length})</h3>
+          <div className="space-y-4">
+            {pendingRequests.map((req) => {
+              const parsed = parseRentalRequestMessage(req.message);
+              return (
+                <RequestCard
+                  key={req.id}
+                  title={req.rental?.title ?? "Rental"}
+                  status={req.status}
+                  price={req.rental ? `${formatInr(req.rental.rent_price_per_day)} / day` : undefined}
+                  coverUrl={req.rental?.coverUrl}
+                  counterparty={role === "seller" ? req.buyer : req.seller}
+                  counterpartyLabel={role === "seller" ? "Requester" : "Seller"}
+                  message={parsed.personalMessage || undefined}
+                  extra={
+                    [parsed.duration, parsed.pickupDate, parsed.pickupLocation]
+                      .filter(Boolean)
+                      .join(" · ") || undefined
+                  }
+                  actions={
+                    <>
+                      {role === "seller" && (
+                        <div className="flex gap-2">
+                          <Button
+                            className="flex-1 bg-emerald-600 hover:bg-emerald-700"
+                            onClick={() => handleAccept(req)}
+                          >
+                            Accept
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            className="flex-1"
+                            onClick={() => handleReject(req)}
+                          >
+                            Reject
+                          </Button>
+                        </div>
+                      )}
+                      {role === "buyer" && (
+                        <Button variant="outline" className="w-full" onClick={() => handleCancel(req)}>
+                          Cancel Request
+                        </Button>
+                      )}
+                    </>
+                  }
+                />
+              );
+            })}
+          </div>
+        </div>
+      )}
+      {acceptedRequests.length > 0 && (
+        <div>
+          <h3 className="mb-3 text-sm font-semibold">Accepted Requests ({acceptedRequests.length})</h3>
+          <div className="space-y-4">
+            {acceptedRequests.map((req) => {
+              const parsed = parseRentalRequestMessage(req.message);
+              return (
+                <RequestCard
+                  key={req.id}
+                  title={req.rental?.title ?? "Rental"}
+                  status={req.status}
+                  price={req.rental ? `${formatInr(req.rental.rent_price_per_day)} / day` : undefined}
+                  coverUrl={req.rental?.coverUrl}
+                  counterparty={role === "seller" ? req.buyer : req.seller}
+                  counterpartyLabel={role === "seller" ? "Requester" : "Seller"}
+                  message={parsed.personalMessage || undefined}
+                  extra={
+                    [parsed.duration, parsed.pickupDate, parsed.pickupLocation]
+                      .filter(Boolean)
+                      .join(" · ") || undefined
+                  }
+                  actions={
+                    <>
+                      {role === "seller" && (
+                        <Button className="w-full" onClick={() => handleMarkAsRentedOut(req)}>
+                          Mark as Rented Out
+                        </Button>
+                      )}
+                    </>
+                  }
+                />
+              );
+            })}
+          </div>
+        </div>
+      )}
+      {activeRentals.length > 0 && (
+        <div>
+          <h3 className="mb-3 text-sm font-semibold">Active Rentals ({activeRentals.length})</h3>
+          <div className="space-y-4">
+            {activeRentals.map((req) => {
+              const parsed = parseRentalRequestMessage(req.message);
+              return (
+                <RequestCard
+                  key={req.id}
+                  title={req.rental?.title ?? "Rental"}
+                  status={req.status}
+                  price={req.rental ? `${formatInr(req.rental.rent_price_per_day)} / day` : undefined}
+                  coverUrl={req.rental?.coverUrl}
+                  counterparty={role === "seller" ? req.buyer : req.seller}
+                  counterpartyLabel={role === "seller" ? "Renter" : "Seller"}
+                  message={parsed.personalMessage || undefined}
+                  extra={
+                    [parsed.duration, parsed.pickupDate, parsed.pickupLocation]
+                      .filter(Boolean)
+                      .join(" · ") || undefined
+                  }
+                  actions={
+                    <>
+                      {role === "buyer" && (
+                        <Button className="w-full" onClick={() => handleReturnItem(req)}>
+                          Returned Item
+                        </Button>
+                      )}
+                    </>
+                  }
+                />
+              );
+            })}
+          </div>
+        </div>
+      )}
+      {pendingReturns.length > 0 && (
+        <div>
+          <h3 className="mb-3 text-sm font-semibold">Pending Returns ({pendingReturns.length})</h3>
+          <div className="space-y-4">
+            {pendingReturns.map((req) => {
+              const parsed = parseRentalRequestMessage(req.message);
+              return (
+                <RequestCard
+                  key={req.id}
+                  title={req.rental?.title ?? "Rental"}
+                  status={req.status}
+                  price={req.rental ? `${formatInr(req.rental.rent_price_per_day)} / day` : undefined}
+                  coverUrl={req.rental?.coverUrl}
+                  counterparty={role === "seller" ? req.buyer : req.seller}
+                  counterpartyLabel={role === "seller" ? "Renter" : "Seller"}
+                  message={parsed.personalMessage || undefined}
+                  extra={
+                    [parsed.duration, parsed.pickupDate, parsed.pickupLocation]
+                      .filter(Boolean)
+                      .join(" · ") || undefined
+                  }
+                  actions={
+                    <>
+                      {role === "seller" && (
+                        <Button className="w-full" onClick={() => handleConfirmReturn(req)}>
+                          Confirm Return
+                        </Button>
+                      )}
+                    </>
+                  }
+                />
+              );
+            })}
+          </div>
+        </div>
+      )}
+      {completedRentals.length > 0 && (
+        <div>
+          <h3 className="mb-3 text-sm font-semibold">Completed Rentals ({completedRentals.length})</h3>
+          <div className="space-y-4">
+            {completedRentals.map((req) => {
+              const parsed = parseRentalRequestMessage(req.message);
+              return (
+                <RequestCard
+                  key={req.id}
+                  title={req.rental?.title ?? "Rental"}
+                  status={req.status}
+                  price={req.rental ? `${formatInr(req.rental.rent_price_per_day)} / day` : undefined}
+                  coverUrl={req.rental?.coverUrl}
+                  counterparty={role === "seller" ? req.buyer : req.seller}
+                  counterpartyLabel={role === "seller" ? "Renter" : "Seller"}
+                  message={parsed.personalMessage || undefined}
+                  extra={
+                    [parsed.duration, parsed.pickupDate, parsed.pickupLocation]
+                      .filter(Boolean)
+                      .join(" · ") || undefined
+                  }
+                  actions={<></>}
+                />
+              );
+            })}
+          </div>
+        </div>
+      )}
+      {otherRequests.length > 0 && (
+        <div>
+          <h3 className="mb-3 text-sm font-semibold">Other Requests ({otherRequests.length})</h3>
+          <div className="space-y-4">
+            {otherRequests.map((req) => {
+              const parsed = parseRentalRequestMessage(req.message);
+              return (
+                <RequestCard
+                  key={req.id}
+                  title={req.rental?.title ?? "Rental"}
+                  status={req.status}
+                  price={req.rental ? `${formatInr(req.rental.rent_price_per_day)} / day` : undefined}
+                  coverUrl={req.rental?.coverUrl}
+                  counterparty={role === "seller" ? req.buyer : req.seller}
+                  counterpartyLabel={role === "seller" ? "Requester" : "Seller"}
+                  message={parsed.personalMessage || undefined}
+                  extra={
+                    [parsed.duration, parsed.pickupDate, parsed.pickupLocation]
+                      .filter(Boolean)
+                      .join(" · ") || undefined
+                  }
+                  actions={
+                    <>
+                      {role === "seller" && req.status === "pending" && (
+                        <div className="flex gap-2">
+                          <Button
+                            className="flex-1 bg-emerald-600 hover:bg-emerald-700"
+                            onClick={() => handleAccept(req)}
+                          >
+                            Accept
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            className="flex-1"
+                            onClick={() => handleReject(req)}
+                          >
+                            Reject
+                          </Button>
+                        </div>
+                      )}
+                      {role === "seller" && req.status === "accepted" && (
+                        <Button className="w-full" onClick={() => handleMarkAsRentedOut(req)}>
+                          Mark as Rented Out
+                        </Button>
+                      )}
+                      {req.status === "pending" && (
+                        <Button variant="outline" className="w-full" onClick={() => handleCancel(req)}>
+                          Cancel Request
+                        </Button>
+                      )}
+                    </>
+                  }
+                />
+              );
+            })}
+          </div>
+        </div>
+      )}
+      <Dialog open={completionModalOpen} onOpenChange={setCompletionModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Rental Completed Successfully</DialogTitle>
+            <DialogDescription>
+              The rental has been completed. Would you like to make this item available for rent again?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => handleCompletionChoice("available")}
+            >
+              Make Available Again
+            </Button>
+            <Button onClick={() => handleCompletionChoice("unavailable")}>
+              Keep Unavailable
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
@@ -527,25 +1008,36 @@ function NotesRequestsTab({
   userId: string | undefined;
   role: "seller" | "buyer";
 }) {
-  const { data: sellerReqs = [], isLoading: ls } = useSellerNotesPurchases(
+  const { data: sellerPurchaseReqs = [], isLoading: ls } = useSellerNotesPurchases(
     role === "seller" ? userId : undefined,
   );
-  const { data: buyerReqs = [], isLoading: lb } = useBuyerNotesPurchases(
+  const { data: buyerPurchaseReqs = [], isLoading: lb } = useBuyerNotesPurchases(
     role === "buyer" ? userId : undefined,
   );
-  const update = useUpdateNotesPurchase();
+  const { data: sellerRentalReqs = [], isLoading: lsr } = useSellerNotesRentals(
+    role === "seller" ? userId : undefined,
+  );
+  const { data: buyerRentalReqs = [], isLoading: lbr } = useBuyerNotesRentals(
+    role === "buyer" ? userId : undefined,
+  );
+  const updatePurchase = useUpdateNotesPurchase();
+  const updateRental = useUpdateNotesRental();
   const openChat = useOpenChatOnAccept();
-  const requests = role === "seller" ? sellerReqs : buyerReqs;
-  const isLoading = role === "seller" ? ls : lb;
+  
+  const purchaseRequests = role === "seller" ? sellerPurchaseReqs : buyerPurchaseReqs;
+  const rentalRequests = role === "seller" ? sellerRentalReqs : buyerRentalReqs;
+  const isLoading = role === "seller" ? (ls || lsr) : (lb || lbr);
+  const [notesCompletionModalOpen, setNotesCompletionModalOpen] = useState(false);
+  const [selectedNotesRequest, setSelectedNotesRequest] = useState<NotesRentalRow | null>(null);
 
-  const act = (
+  const actPurchase = (
     req: NotesPurchaseRow,
     status: NotesPurchaseRow["status"],
     title: string,
     desc: string,
     notify: string,
   ) => {
-    update.mutate(
+    updatePurchase.mutate(
       {
         requestId: req.id,
         status,
@@ -562,90 +1054,442 @@ function NotesRequestsTab({
     );
   };
 
+  const actRental = (
+    req: NotesRentalRow,
+    status: NotesRentalStatus,
+    title: string,
+    desc: string,
+    notify: string,
+    listingStatus?: "available" | "rented_out" | "unavailable",
+  ) => {
+    updateRental.mutate(
+      {
+        requestId: req.id,
+        status,
+        notifyUserId: notify,
+        notificationTitle: title,
+        notificationDescription: desc,
+        listingStatus,
+      },
+      {
+        onSuccess: (result) => {
+          if (status === "accepted" || status === "active_rental") openChat(result, title);
+          else toast.success(title);
+        },
+      },
+    );
+  };
+
+  const handleMarkAsRentedOutNotes = (req: NotesRentalRow) => {
+    actRental(
+      req,
+      "active_rental",
+      "Rental Started",
+      "Your notes rental has started. You can now access the notes.",
+      req.buyer_id,
+      "rented_out",
+    );
+  };
+
+  const handleReturnNotes = (req: NotesRentalRow) => {
+    actRental(
+      req,
+      "return_requested",
+      "Notes Returned",
+      "The renter has returned the notes. Please confirm.",
+      req.seller_id,
+    );
+  };
+
+  const handleConfirmReturnNotes = (req: NotesRentalRow) => {
+    setSelectedNotesRequest(req);
+    setNotesCompletionModalOpen(true);
+  };
+
+  const handleNotesCompletionChoice = (listingStatus: "available" | "unavailable") => {
+    if (!selectedNotesRequest) return;
+    actRental(
+      selectedNotesRequest,
+      "completed",
+      "Return Confirmed",
+      "Your return of the notes has been confirmed.",
+      selectedNotesRequest.buyer_id,
+      listingStatus,
+    );
+    setNotesCompletionModalOpen(false);
+    setSelectedNotesRequest(null);
+  };
+
   if (isLoading) return <LoadingState />;
-  if (!requests.length) return <EmptyState label="notes" />;
+  if (!purchaseRequests.length && !rentalRequests.length) return <EmptyState label="notes" />;
+
+  const pendingRequests = rentalRequests.filter((r) => r.status === "pending");
+  const acceptedRequests = rentalRequests.filter((r) => r.status === "accepted");
+  const activeRentals = rentalRequests.filter((r) => r.status === "active_rental");
+  const pendingReturns = rentalRequests.filter((r) => r.status === "return_requested");
+  const completedRentals = rentalRequests.filter((r) => r.status === "completed");
+  const otherRentals = rentalRequests.filter((r) => !["pending", "accepted", "active_rental", "return_requested", "completed"].includes(r.status));
 
   return (
-    <div className="space-y-4">
-      {requests.map((req) => (
-        <RequestCard
-          key={req.id}
-          title="Notes purchase request"
-          status={req.status}
-          message={req.message ?? undefined}
-          actions={
-            <>
-              {role === "seller" && req.status === "pending" && (
-                <div className="flex gap-2">
+    <>
+      {pendingRequests.length > 0 && (
+        <div>
+          <h3 className="mb-3 text-sm font-semibold">Pending Requests ({pendingRequests.length})</h3>
+          <div className="space-y-4">
+            {pendingRequests.map((req) => {
+              const rentalDuration = parseRentalDurationFromMessage(req.message);
+              return (
+                <RequestCard
+                  key={req.id}
+                  title="Notes rental request"
+                  status={req.status}
+                  message={req.message?.replace(/Rental Duration: \d+ day[s]?\n?/, "") ?? undefined}
+                  extra={rentalDuration ? `Duration: ${rentalDuration} days` : undefined}
+                  actions={
+                    <>
+                      {role === "seller" && (
+                        <div className="flex gap-2">
+                          <Button
+                            className="flex-1 bg-emerald-600 hover:bg-emerald-700"
+                            onClick={() =>
+                              actRental(
+                                req,
+                                "accepted",
+                                "Rental Request Accepted — Chat Unlocked",
+                                "Your rental request was accepted. You can now chat with the seller.",
+                                req.buyer_id,
+                              )
+                            }
+                          >
+                            Accept
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            className="flex-1"
+                            onClick={() =>
+                              actRental(
+                                req,
+                                "rejected",
+                                "Rental Request Rejected",
+                                "Your rental request was rejected.",
+                                req.buyer_id,
+                              )
+                            }
+                          >
+                            Reject
+                          </Button>
+                        </div>
+                      )}
+                      {role === "buyer" && (
+                        <Button
+                          variant="outline"
+                          className="w-full"
+                          onClick={() =>
+                            actRental(
+                              req,
+                              "cancelled",
+                              "Rental Request Cancelled",
+                              "A rental request was cancelled.",
+                              role === "buyer" ? req.seller_id : req.buyer_id,
+                            )
+                          }
+                        >
+                          Cancel
+                        </Button>
+                      )}
+                    </>
+                  }
+                />
+              );
+            })}
+          </div>
+        </div>
+      )}
+      {acceptedRequests.length > 0 && (
+        <div>
+          <h3 className="mb-3 text-sm font-semibold">Accepted Requests ({acceptedRequests.length})</h3>
+          <div className="space-y-4">
+            {acceptedRequests.map((req) => {
+              const rentalDuration = parseRentalDurationFromMessage(req.message);
+              return (
+                <RequestCard
+                  key={req.id}
+                  title="Notes rental request"
+                  status={req.status}
+                  message={req.message?.replace(/Rental Duration: \d+ day[s]?\n?/, "") ?? undefined}
+                  extra={rentalDuration ? `Duration: ${rentalDuration} days` : undefined}
+                  actions={
+                    <>
+                      {role === "seller" && (
+                        <Button className="w-full" onClick={() => handleMarkAsRentedOutNotes(req)}>
+                          Mark as Rented Out
+                        </Button>
+                      )}
+                    </>
+                  }
+                />
+              );
+            })}
+          </div>
+        </div>
+      )}
+      {activeRentals.length > 0 && (
+        <div>
+          <h3 className="mb-3 text-sm font-semibold">Active Rentals ({activeRentals.length})</h3>
+          <div className="space-y-4">
+            {activeRentals.map((req) => {
+              const rentalDuration = parseRentalDurationFromMessage(req.message);
+              return (
+                <RequestCard
+                  key={req.id}
+                  title="Notes rental request"
+                  status={req.status}
+                  message={req.message?.replace(/Rental Duration: \d+ day[s]?\n?/, "") ?? undefined}
+                  extra={rentalDuration ? `Duration: ${rentalDuration} days` : undefined}
+                  actions={
+                    <>
+                      {role === "buyer" && (
+                        <Button className="w-full" onClick={() => handleReturnNotes(req)}>
+                          Returned Notes
+                        </Button>
+                      )}
+                    </>
+                  }
+                />
+              );
+            })}
+          </div>
+        </div>
+      )}
+      {pendingReturns.length > 0 && (
+        <div>
+          <h3 className="mb-3 text-sm font-semibold">Pending Returns ({pendingReturns.length})</h3>
+          <div className="space-y-4">
+            {pendingReturns.map((req) => {
+              const rentalDuration = parseRentalDurationFromMessage(req.message);
+              return (
+                <RequestCard
+                  key={req.id}
+                  title="Notes rental request"
+                  status={req.status}
+                  message={req.message?.replace(/Rental Duration: \d+ day[s]?\n?/, "") ?? undefined}
+                  extra={rentalDuration ? `Duration: ${rentalDuration} days` : undefined}
+                  actions={
+                    <>
+                      {role === "seller" && (
+                        <Button className="w-full" onClick={() => handleConfirmReturnNotes(req)}>
+                          Confirm Return
+                        </Button>
+                      )}
+                    </>
+                  }
+                />
+              );
+            })}
+          </div>
+        </div>
+      )}
+      {completedRentals.length > 0 && (
+        <div>
+          <h3 className="mb-3 text-sm font-semibold">Completed Rentals ({completedRentals.length})</h3>
+          <div className="space-y-4">
+            {completedRentals.map((req) => {
+              const rentalDuration = parseRentalDurationFromMessage(req.message);
+              return (
+                <RequestCard
+                  key={req.id}
+                  title="Notes rental request"
+                  status={req.status}
+                  message={req.message?.replace(/Rental Duration: \d+ day[s]?\n?/, "") ?? undefined}
+                  extra={rentalDuration ? `Duration: ${rentalDuration} days` : undefined}
+                  actions={<></>}
+                />
+              );
+            })}
+          </div>
+        </div>
+      )}
+      <div className="space-y-4">
+        {purchaseRequests.map((req) => (
+          <RequestCard
+            key={req.id}
+            title="Notes purchase request"
+            status={req.status}
+            message={req.message ?? undefined}
+            extra="Type: Purchase"
+            actions={
+              <>
+                {role === "seller" && req.status === "pending" && (
+                  <div className="flex gap-2">
+                    <Button
+                      className="flex-1 bg-emerald-600 hover:bg-emerald-700"
+                      onClick={() =>
+                        actPurchase(
+                          req,
+                          "accepted",
+                          "Notes Request Accepted — Chat Unlocked",
+                          "Your notes request was accepted. You can now chat with the seller.",
+                          req.buyer_id,
+                        )
+                      }
+                    >
+                      Accept
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      className="flex-1"
+                      onClick={() =>
+                        actPurchase(
+                          req,
+                          "rejected",
+                          "Notes Request Rejected",
+                          "Your notes request was rejected.",
+                          req.buyer_id,
+                        )
+                      }
+                    >
+                      Reject
+                    </Button>
+                  </div>
+                )}
+                {role === "seller" && req.status === "accepted" && (
                   <Button
-                    className="flex-1 bg-emerald-600 hover:bg-emerald-700"
+                    className="w-full"
                     onClick={() =>
-                      act(
+                      actPurchase(
                         req,
-                        "accepted",
-                        "Notes Request Accepted — Chat Unlocked",
-                        "Your notes request was accepted. You can now chat with the seller.",
+                        "completed",
+                        "Deal Completed",
+                        "Your notes purchase is complete.",
                         req.buyer_id,
                       )
                     }
                   >
-                    Accept
+                    Mark Completed
                   </Button>
+                )}
+                {req.status === "pending" && (
                   <Button
-                    variant="destructive"
-                    className="flex-1"
+                    variant="outline"
+                    className="w-full"
                     onClick={() =>
-                      act(
+                      actPurchase(
                         req,
-                        "rejected",
-                        "Notes Request Rejected",
-                        "Your notes request was rejected.",
-                        req.buyer_id,
+                        "cancelled",
+                        "Request Cancelled",
+                        "A notes request was cancelled.",
+                        role === "buyer" ? req.seller_id : req.buyer_id,
                       )
                     }
                   >
-                    Reject
+                    Cancel
                   </Button>
-                </div>
-              )}
-              {role === "seller" && req.status === "accepted" && (
-                <Button
-                  className="w-full"
-                  onClick={() =>
-                    act(
-                      req,
-                      "completed",
-                      "Deal Completed",
-                      "Your notes purchase is complete.",
-                      req.buyer_id,
-                    )
-                  }
-                >
-                  Mark Completed
-                </Button>
-              )}
-              {req.status === "pending" && (
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  onClick={() =>
-                    act(
-                      req,
-                      "cancelled",
-                      "Request Cancelled",
-                      "A notes request was cancelled.",
-                      role === "buyer" ? req.seller_id : req.buyer_id,
-                    )
-                  }
-                >
-                  Cancel
-                </Button>
-              )}
-            </>
-          }
-        />
-      ))}
-    </div>
+                )}
+              </>
+            }
+          />
+        ))}
+        {otherRentals.length > 0 && (
+          <div>
+            <h3 className="mb-3 text-sm font-semibold">Other Requests ({otherRentals.length})</h3>
+            <div className="space-y-4">
+              {otherRentals.map((req) => {
+                const rentalDuration = parseRentalDurationFromMessage(req.message);
+                return (
+                  <RequestCard
+                    key={req.id}
+                    title="Notes rental request"
+                    status={req.status}
+                    message={req.message?.replace(/Rental Duration: \d+ day[s]?\n?/, "") ?? undefined}
+                    extra={rentalDuration ? `Duration: ${rentalDuration} days` : undefined}
+                    actions={
+                      <>
+                        {role === "seller" && req.status === "pending" && (
+                          <div className="flex gap-2">
+                            <Button
+                              className="flex-1 bg-emerald-600 hover:bg-emerald-700"
+                              onClick={() =>
+                                actRental(
+                                  req,
+                                  "accepted",
+                                  "Rental Request Accepted — Chat Unlocked",
+                                  "Your rental request was accepted. You can now chat with the seller.",
+                                  req.buyer_id,
+                                )
+                              }
+                            >
+                              Accept
+                            </Button>
+                            <Button
+                              variant="destructive"
+                              className="flex-1"
+                              onClick={() =>
+                                actRental(
+                                  req,
+                                  "rejected",
+                                  "Rental Request Rejected",
+                                  "Your rental request was rejected.",
+                                  req.buyer_id,
+                                )
+                              }
+                            >
+                              Reject
+                            </Button>
+                          </div>
+                        )}
+                        {role === "seller" && req.status === "accepted" && (
+                          <Button className="w-full" onClick={() => handleMarkAsRentedOutNotes(req)}>
+                            Mark as Rented Out
+                          </Button>
+                        )}
+                        {req.status === "pending" && (
+                          <Button
+                            variant="outline"
+                            className="w-full"
+                            onClick={() =>
+                              actRental(
+                                req,
+                                "cancelled",
+                                "Rental Request Cancelled",
+                                "A rental request was cancelled.",
+                                role === "buyer" ? req.seller_id : req.buyer_id,
+                              )
+                            }
+                          >
+                            Cancel
+                          </Button>
+                        )}
+                      </>
+                    }
+                  />
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+      <Dialog open={notesCompletionModalOpen} onOpenChange={setNotesCompletionModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Notes Rental Completed Successfully</DialogTitle>
+            <DialogDescription>
+              The notes rental has been completed. Would you like to make these notes available for rent again?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => handleNotesCompletionChoice("available")}
+            >
+              Make Available Again
+            </Button>
+            <Button onClick={() => handleNotesCompletionChoice("unavailable")}>
+              Keep Unavailable
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 

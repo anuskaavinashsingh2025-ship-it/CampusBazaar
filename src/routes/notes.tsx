@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   ArrowLeft,
+  ChevronDown,
   Loader2,
   Search,
   Plus,
@@ -89,6 +90,7 @@ function NotesHubPage() {
   const [query, setQuery] = useState("");
   const [tab, setTab] = useState<"sell" | "rent" | "requests">("sell");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [visibleCount, setVisibleCount] = useState(12);
 
   // Notes Request → Chat integration.
   // When a seller clicks "Respond" on a request, this hook:
@@ -386,7 +388,7 @@ function NotesHubPage() {
           </Button>
         </div>
 
-        <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)}>
+        <Tabs value={tab} onValueChange={(v) => { setTab(v as typeof tab); setVisibleCount(12); }}>
           <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="sell">Sell</TabsTrigger>
             <TabsTrigger value="rent">Rent</TabsTrigger>
@@ -399,77 +401,90 @@ function NotesHubPage() {
                 <Loader2 className="h-6 w-6 animate-spin" />
               </div>
             ) : filteredListings.length ? (
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {filteredListings.map((l) => (
-                  <Card
-                    key={l.id}
-                    className="overflow-hidden border-border/60 shadow-sm"
-                  >
-                    <CardContent className="p-0">
-                      <div className="relative">
-                        <div
-                          className="absolute left-2 top-2 z-20"
-                          onClick={(e) => e.stopPropagation()}
-                          role="presentation"
-                        >
-                          <ListingActions
-                            itemType="notes"
-                            itemId={l.id}
-                            ownerId={l.seller_id}
-                            onEdit={() => {
-                              console.log("[ListingActions] onEdit notes", l.id);
-                              window.location.assign(`/upload-notes?edit=${l.id}`);
-                            }}
-                          />
-                        </div>
-                        <div
-                          className="cursor-pointer"
-                          onClick={() => navigate({ to: "/notes/$id", params: { id: l.id } })}
-                        >
-                          {(l as any).coverUrl ? (
-                            <img
-                              src={(l as any).coverUrl}
-                              alt={l.title}
-                              className="h-40 w-full object-cover"
-                              loading="lazy"
+              <>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {filteredListings.slice(0, visibleCount).map((l) => (
+                    <Card
+                      key={l.id}
+                      className="overflow-hidden border-border/60 shadow-sm"
+                    >
+                      <CardContent className="p-0">
+                        <div className="relative">
+                          <div
+                            className="absolute left-2 top-2 z-20"
+                            onClick={(e) => e.stopPropagation()}
+                            role="presentation"
+                          >
+                            <ListingActions
+                              itemType="notes"
+                              itemId={l.id}
+                              ownerId={l.seller_id}
+                              onEdit={() => {
+                                console.log("[ListingActions] onEdit notes", l.id);
+                                window.location.assign(`/upload-notes?edit=${l.id}`);
+                              }}
                             />
-                          ) : (
-                            <div className="flex h-40 w-full items-center justify-center bg-muted text-sm text-muted-foreground">
-                              No image
-                            </div>
-                          )}
+                          </div>
+                          <div
+                            className="cursor-pointer"
+                            onClick={() => navigate({ to: "/notes/$id", params: { id: l.id } })}
+                          >
+                            {(l as any).coverUrl ? (
+                              <img
+                                src={(l as any).coverUrl}
+                                alt={l.title}
+                                className="h-40 w-full object-cover"
+                                loading="lazy"
+                              />
+                            ) : (
+                              <div className="flex h-40 w-full items-center justify-center bg-muted text-sm text-muted-foreground">
+                                No image
+                              </div>
+                            )}
+                          </div>
+                          <div
+                            className="absolute right-2 top-2 z-20"
+                            onClick={(e) => e.stopPropagation()}
+                            role="presentation"
+                          >
+                            <WishlistButton listingId={l.id} />
+                          </div>
                         </div>
-                        <div
-                          className="absolute right-2 top-2 z-20"
-                          onClick={(e) => e.stopPropagation()}
-                          role="presentation"
-                        >
-                          <WishlistButton listingId={l.id} />
+                        <div className="space-y-2 p-3">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="text-sm font-semibold">{l.title}</div>
+                            <Badge className="bg-blue-500 text-white text-xs">For Rent</Badge>
+                          </div>
+                          <div className="text-xs text-muted-foreground line-clamp-2">
+                            {l.description}
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <Badge variant="secondary">{l.category}</Badge>
+                            <Badge variant="outline">
+                              {l.daily_rental_price != null
+                                ? `${formatInr(Number(l.daily_rental_price))} / day`
+                                : "—"}
+                            </Badge>
+                            {l.is_digital ? (
+                              <Badge variant="outline">Digital</Badge>
+                            ) : (
+                              <Badge variant="outline">Physical</Badge>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                      <div className="space-y-2 p-3">
-                        <div className="text-sm font-semibold">{l.title}</div>
-                        <div className="text-xs text-muted-foreground line-clamp-2">
-                          {l.description}
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          <Badge variant="secondary">{l.category}</Badge>
-                          {l.is_free ? (
-                            <Badge variant="outline">Free</Badge>
-                          ) : (
-                            <Badge variant="outline">Paid</Badge>
-                          )}
-                          {l.is_digital ? (
-                            <Badge variant="outline">Digital</Badge>
-                          ) : (
-                            <Badge variant="outline">Physical</Badge>
-                          )}
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+                {visibleCount < filteredListings.length && (
+                  <div className="mt-6 flex justify-center">
+                    <Button variant="outline" onClick={() => setVisibleCount((c) => c + 12)}>
+                      Load More
+                      <ChevronDown className="ml-1 h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
+              </>
             ) : (
               <div className="py-16 text-center text-sm text-muted-foreground">
                 No notes listings yet.
@@ -483,72 +498,82 @@ function NotesHubPage() {
                 <Loader2 className="h-6 w-6 animate-spin" />
               </div>
             ) : filteredListings.length ? (
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {filteredListings.map((l) => (
-                  <Card
-                    key={l.id}
-                    className="overflow-hidden border-border/60 shadow-sm"
-                  >
-                    <CardContent className="p-0">
-                      <div className="relative">
-                        <div
-                          className="absolute left-2 top-2 z-20"
-                          onClick={(e) => e.stopPropagation()}
-                          role="presentation"
-                        >
-                          <ListingActions
-                            itemType="notes"
-                            itemId={l.id}
-                            ownerId={l.seller_id}
-                            onEdit={() => {
-                              console.log("[ListingActions] onEdit notes", l.id);
-                              window.location.assign(`/upload-notes?edit=${l.id}`);
-                            }}
-                          />
-                        </div>
-                        <div
-                          className="cursor-pointer"
-                          onClick={() => navigate({ to: "/notes/$id", params: { id: l.id } })}
-                        >
-                          {(l as any).coverUrl ? (
-                            <img
-                              src={(l as any).coverUrl}
-                              alt={l.title}
-                              className="h-40 w-full object-cover"
-                              loading="lazy"
+              <>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {filteredListings.slice(0, visibleCount).map((l) => (
+                    <Card
+                      key={l.id}
+                      className="overflow-hidden border-border/60 shadow-sm"
+                    >
+                      <CardContent className="p-0">
+                        <div className="relative">
+                          <div
+                            className="absolute left-2 top-2 z-20"
+                            onClick={(e) => e.stopPropagation()}
+                            role="presentation"
+                          >
+                            <ListingActions
+                              itemType="notes"
+                              itemId={l.id}
+                              ownerId={l.seller_id}
+                              onEdit={() => {
+                                console.log("[ListingActions] onEdit notes", l.id);
+                                window.location.assign(`/upload-notes?edit=${l.id}`);
+                              }}
                             />
-                          ) : (
-                            <div className="flex h-40 w-full items-center justify-center bg-muted text-sm text-muted-foreground">
-                              No image
-                            </div>
-                          )}
+                          </div>
+                          <div
+                            className="cursor-pointer"
+                            onClick={() => navigate({ to: "/notes/$id", params: { id: l.id } })}
+                          >
+                            {(l as any).coverUrl ? (
+                              <img
+                                src={(l as any).coverUrl}
+                                alt={l.title}
+                                className="h-40 w-full object-cover"
+                                loading="lazy"
+                              />
+                            ) : (
+                              <div className="flex h-40 w-full items-center justify-center bg-muted text-sm text-muted-foreground">
+                                No image
+                              </div>
+                            )}
+                          </div>
+                          <div
+                            className="absolute right-2 top-2 z-20"
+                            onClick={(e) => e.stopPropagation()}
+                            role="presentation"
+                          >
+                            <WishlistButton listingId={l.id} />
+                          </div>
                         </div>
-                        <div
-                          className="absolute right-2 top-2 z-20"
-                          onClick={(e) => e.stopPropagation()}
-                          role="presentation"
-                        >
-                          <WishlistButton listingId={l.id} />
+                        <div className="space-y-2 p-3">
+                          <div className="text-sm font-semibold">{l.title}</div>
+                          <div className="text-xs text-muted-foreground line-clamp-2">
+                            {l.description}
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <Badge variant="secondary">{l.category}</Badge>
+                            <Badge variant="outline">
+                              {l.daily_rental_price != null
+                                ? `${formatInr(Number(l.daily_rental_price))} / day`
+                                : "—"}
+                            </Badge>
+                          </div>
                         </div>
-                      </div>
-                      <div className="space-y-2 p-3">
-                        <div className="text-sm font-semibold">{l.title}</div>
-                        <div className="text-xs text-muted-foreground line-clamp-2">
-                          {l.description}
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          <Badge variant="secondary">{l.category}</Badge>
-                          <Badge variant="outline">
-                            {l.daily_rental_price != null
-                              ? `${formatInr(Number(l.daily_rental_price))} / day`
-                              : "—"}
-                          </Badge>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+                {visibleCount < filteredListings.length && (
+                  <div className="mt-6 flex justify-center">
+                    <Button variant="outline" onClick={() => setVisibleCount((c) => c + 12)}>
+                      Load More
+                      <ChevronDown className="ml-1 h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
+              </>
             ) : (
               <div className="py-16 text-center text-sm text-muted-foreground">
                 No rental notes yet.

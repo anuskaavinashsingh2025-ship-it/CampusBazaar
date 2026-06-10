@@ -83,6 +83,7 @@ function FoodHubPage() {
   const [mode, setMode] = useState<"sell" | "requests">("sell");
   const [query, setQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
+  const [visibleCount, setVisibleCount] = useState(12);
 
   const { data: listings, isLoading: loadingListings } = useQuery({
     queryKey: ["food", "listings"],
@@ -362,105 +363,99 @@ function FoodHubPage() {
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               </div>
             ) : filteredListings.length ? (
-              <div className="space-y-3">
-                {filteredListings.map((l) => {
-                  const expiry = getExpiryBadge(l.expiry_date);
-                  return (
-                    <Card
-                      key={l.id}
-                      className="cursor-pointer overflow-hidden border-border/60 shadow-sm transition-shadow hover:shadow-md"
-                      onClick={() => navigate({ to: "/food/$id", params: { id: l.id } })}
-                    >
-                      <CardContent className="flex gap-3 p-3">
-                        <div className="relative shrink-0">
-                          <div
-                            className="absolute left-2 top-2 z-20"
-                            onClick={(e) => e.stopPropagation()}
-                            role="presentation"
-                          >
-                            <ListingActions
-                              itemType="food"
-                              itemId={l.id}
-                              ownerId={l.seller_id}
-                              onEdit={() => {
-                                console.log("[ListingActions] onEdit food", l.id);
-                                window.location.assign(`/upload-food?edit=${l.id}`);
-                              }}
-                            />
-                          </div>
-                          {l.coverUrl ? (
-                            <img
-                              src={l.coverUrl}
-                              alt={l.product_name}
-                              className="h-24 w-24 rounded-xl object-cover sm:h-28 sm:w-28"
-                            />
-                          ) : (
-                            <div className="flex h-24 w-24 items-center justify-center rounded-xl bg-muted sm:h-28 sm:w-28">
-                              <ShoppingBag className="h-8 w-8 text-muted-foreground" />
-                            </div>
-                          )}
-                          <span
-                            className={`absolute left-1 top-1 rounded-md px-1.5 py-0.5 text-[9px] font-semibold ${expiry.className}`}
-                          >
-                            {expiry.label}
-                          </span>
-                          <div
-                            className="absolute right-2 top-2 z-20"
-                            onClick={(e) => e.stopPropagation()}
-                            role="presentation"
-                          >
-                            <WishlistButton listingId={l.id} />
-                          </div>
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-start justify-between gap-2">
-                            <div>
-                              <h3 className="line-clamp-2 text-sm font-semibold">
-                                {l.product_name}
-                              </h3>
-                              <p className="text-xs text-muted-foreground">
-                                {l.brand_name} · {l.quantity}
-                              </p>
-                            </div>
-                          </div>
-                          <p className="mt-1 text-base font-bold text-sky-700">
-                            {formatInr(Number(l.price))}
-                          </p>
-                          <div className="mt-2 flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <Avatar className="h-6 w-6">
-                                {l.seller?.avatar_url ? (
-                                  <AvatarImage
-                                    src={`${l.seller.avatar_url}${(l.seller.avatar_url as string).includes("?") ? "&" : "?"}t=${Date.now()}`}
-                                    alt=""
-                                  />
-                                ) : null}
-                                <AvatarFallback className="text-[9px]">
-                                  {(l.seller?.display_name ?? "S").slice(0, 2).toUpperCase()}
-                                </AvatarFallback>
-                              </Avatar>
-                              <span className="text-xs text-muted-foreground">
-                                {l.seller?.display_name ?? "Seller"} · {timeAgo(l.created_at)}
-                              </span>
-                            </div>
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="h-8 w-8"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                toast.message("Chat coming soon");
-                              }}
+              <>
+                <div className="space-y-3">
+                  {filteredListings.slice(0, visibleCount).map((l) => {
+                    const expiry = getExpiryBadge(l.expiry_date);
+                    return (
+                      <Card
+                        key={l.id}
+                        className="cursor-pointer overflow-hidden border-border/60 shadow-sm transition-shadow hover:shadow-md"
+                        onClick={() => navigate({ to: "/food/$id", params: { id: l.id } })}
+                      >
+                        <CardContent className="flex gap-3 p-3">
+                          <div className="relative shrink-0">
+                            {l.coverUrl ? (
+                              <img
+                                src={l.coverUrl}
+                                alt={l.product_name}
+                                className="h-24 w-24 rounded-xl object-cover sm:h-28 sm:w-28"
+                              />
+                            ) : (
+                              <div className="flex h-24 w-24 items-center justify-center rounded-xl bg-muted sm:h-28 sm:w-28">
+                                <ShoppingBag className="h-8 w-8 text-muted-foreground" />
+                              </div>
+                            )}
+                            <span
+                              className={`absolute left-1 top-1 rounded-md px-1.5 py-0.5 text-[9px] font-semibold ${expiry.className}`}
                             >
-                              <MessageSquare className="h-4 w-4" />
-                            </Button>
+                              {expiry.label}
+                            </span>
+                            <div
+                              className="absolute right-2 top-2 z-20"
+                              onClick={(e) => e.stopPropagation()}
+                              role="presentation"
+                            >
+                              <WishlistButton listingId={l.id} />
+                            </div>
                           </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  );
-                })}
-              </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-start justify-between gap-2">
+                              <div>
+                                <h3 className="line-clamp-2 text-sm font-semibold">
+                                  {l.product_name}
+                                </h3>
+                                <p className="text-xs text-muted-foreground">
+                                  {l.brand_name} · {l.quantity}
+                                </p>
+                              </div>
+                            </div>
+                            <p className="mt-1 text-base font-bold text-sky-700">
+                              {formatInr(Number(l.price))}
+                            </p>
+                            <div className="mt-2 flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <Avatar className="h-6 w-6">
+                                  {l.seller?.avatar_url ? (
+                                    <AvatarImage
+                                      src={`${l.seller.avatar_url}${(l.seller.avatar_url as string).includes("?") ? "&" : "?"}t=${Date.now()}`}
+                                      alt=""
+                                    />
+                                  ) : null}
+                                  <AvatarFallback className="text-[9px]">
+                                    {(l.seller?.display_name ?? "S").slice(0, 2).toUpperCase()}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <span className="text-xs text-muted-foreground">
+                                  {l.seller?.display_name ?? "Seller"} · {timeAgo(l.created_at)}
+                                </span>
+                              </div>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-8 w-8"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toast.message("Chat coming soon");
+                                }}
+                              >
+                                <MessageSquare className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+                {visibleCount < filteredListings.length && (
+                  <div className="mt-4 flex justify-center">
+                    <Button variant="outline" onClick={() => setVisibleCount((c) => c + 12)}>
+                      Load More
+                    </Button>
+                  </div>
+                )}
+              </>
             ) : (
               <div className="flex flex-col items-center py-16 text-center">
                 <Heart className="mb-4 h-12 w-12 text-muted-foreground/40" />

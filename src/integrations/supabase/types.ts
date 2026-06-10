@@ -160,9 +160,12 @@ export type Database = {
       conversations: {
         Row: {
           archived_at: string | null;
+          archive_reason: string | null;
           buyer_id: string;
           buyer_unread_count: number;
           completed_at: string | null;
+          completion_requested_at: string | null;
+          completion_requested_by: string | null;
           context_id: string;
           context_type: Database["public"]["Enums"]["chat_context_type"];
           created_at: string;
@@ -180,9 +183,12 @@ export type Database = {
         };
         Insert: {
           archived_at?: string | null;
+          archive_reason?: string | null;
           buyer_id: string;
           buyer_unread_count?: number;
           completed_at?: string | null;
+          completion_requested_at?: string | null;
+          completion_requested_by?: string | null;
           context_id: string;
           context_type: Database["public"]["Enums"]["chat_context_type"];
           created_at?: string;
@@ -200,9 +206,12 @@ export type Database = {
         };
         Update: {
           archived_at?: string | null;
+          archive_reason?: string | null;
           buyer_id?: string;
           buyer_unread_count?: number;
           completed_at?: string | null;
+          completion_requested_at?: string | null;
+          completion_requested_by?: string | null;
           context_id?: string;
           context_type?: Database["public"]["Enums"]["chat_context_type"];
           created_at?: string;
@@ -1386,7 +1395,7 @@ export type Database = {
         | "inappropriate"
         | "other";
       chat_report_target: "user" | "conversation" | "listing";
-      conversation_status: "active" | "archived" | "reported" | "completed";
+      conversation_status: "active" | "archived" | "reported" | "completed" | "auto_archived" | "completion_pending";
       food_listing_status: "available" | "hidden" | "expired" | "sold";
       food_order_status: "pending" | "accepted" | "rejected" | "completed" | "cancelled";
       food_request_status: "open" | "fulfilled" | "expired" | "closed";
@@ -1557,7 +1566,7 @@ export const Constants = {
         "other",
       ],
       chat_report_target: ["user", "conversation", "listing"],
-      conversation_status: ["active", "archived", "reported", "completed"],
+      conversation_status: ["active", "archived", "reported", "completed", "auto_archived", "completion_pending"],
       food_listing_status: ["available", "hidden", "expired", "sold"],
       food_order_status: ["pending", "accepted", "rejected", "completed", "cancelled"],
       food_request_status: ["open", "fulfilled", "expired", "closed"],

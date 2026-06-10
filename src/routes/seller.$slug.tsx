@@ -46,7 +46,7 @@ function SellerPage() {
   const { slug } = Route.useParams();
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [tab, setTab] = useState<"products" | "rentals" | "reviews" | "completed">("products");
+  const [tab, setTab] = useState<"products" | "rentals" | "notes" | "reviews" | "completed">("products");
 
   const { data: seller, isLoading } = useQuery({
     queryKey: ["seller", slug],
@@ -202,6 +202,85 @@ function SellerPage() {
             rating_avg: Number(seller.rating_avg),
           },
           coverImageUrl: imageMap.get(r.id) ?? null,
+        }),
+      );
+    },
+    enabled: Boolean(seller?.user_id && userProfile),
+  });
+
+  const { data: notes = [], isLoading: loadingNotes } = useQuery({
+    queryKey: ["seller_notes", seller?.user_id, userProfile?.id],
+    queryFn: async () => {
+      if (!seller) return [];
+      const { data, error } = await supabase
+        .from("notes_listings" as unknown as keyof Database["public"]["Tables"])
+        .select(
+          "id,title,listing_type,category,subject,faculty,semester,branch,daily_rental_price,rental_duration_days,condition,is_digital,is_free,status,seller_id,created_at"
+        )
+        .eq("seller_id", seller.user_id)
+        .eq("status", "available")
+        .order("created_at", { ascending: false })
+        .limit(24);
+      if (error) throw error;
+      const rows = data ?? [];
+      const ids = rows.map((r: { id: string }) => r.id);
+      if (!ids.length) return [];
+
+      const { data: images } = await supabase
+        .from("notes_assets" as unknown as keyof Database["public"]["Tables"])
+        .select("listing_id,storage_path,sort_index")
+        .eq("kind", "image")
+        .in("listing_id", ids);
+
+      const imageMap = new Map<string, string>();
+      for (const img of images ?? []) {
+        const row = img as { listing_id: string; storage_path: string; sort_index: number };
+        if (!imageMap.has(row.listing_id)) {
+          imageMap.set(
+            row.listing_id,
+            supabase.storage.from("notes-assets").getPublicUrl(row.storage_path).data.publicUrl,
+          );
+        }
+      }
+
+      return rows.map(
+        (n: {
+          id: string;
+          title: string;
+          listing_type: "sell" | "rent";
+          category: string;
+          subject: string | null;
+          faculty: string | null;
+          semester: string | null;
+          branch: string | null;
+          daily_rental_price: number | string | null;
+          rental_duration_days: number | null;
+          condition: string | null;
+          is_digital: boolean;
+          is_free: boolean;
+          seller_id: string;
+        }) => ({
+          id: n.id,
+          title: n.title,
+          listing_type: n.listing_type,
+          category: n.category,
+          subject: n.subject,
+          faculty: n.faculty,
+          semester: n.semester,
+          branch: n.branch,
+          daily_rental_price: n.daily_rental_price,
+          rental_duration_days: n.rental_duration_days,
+          condition: n.condition,
+          is_digital: n.is_digital,
+          is_free: n.is_free,
+          seller: {
+            user_id: seller.user_id,
+            slug: seller.slug,
+            display_name: seller.display_name,
+            avatar_url: (userProfile?.avatar_url as string | null) ?? seller.avatar_url,
+            rating_avg: Number(seller.rating_avg),
+          },
+          coverImageUrl: imageMap.get(n.id) ?? null,
         }),
       );
     },
@@ -815,6 +894,7 @@ function SellerPage() {
               <TabsList>
                 <TabsTrigger value="products">Products ({products.length})</TabsTrigger>
                 <TabsTrigger value="rentals">Rentals ({rentals.length})</TabsTrigger>
+                <TabsTrigger value="notes">Notes ({notes.length})</TabsTrigger>
                 <TabsTrigger value="reviews">
                   Reviews ({sellerMetrics?.reviewsReceived ?? seller.rating_count})
                 </TabsTrigger>
@@ -863,6 +943,67 @@ function SellerPage() {
                   <Card className="border-dashed">
                     <CardContent className="py-12 text-center text-sm text-muted-foreground">
                       No active rentals listed yet.
+                    </CardContent>
+                  </Card>
+                )}
+              </TabsContent>
+
+              <TabsContent value="notes" className="mt-4">
+                {loadingNotes ? (
+                  <div className="flex justify-center py-12">
+                    <Loader2 className="h-6 w-6 animate-spin" />
+                  </div>
+                ) : notes.length ? (
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    {notes.map((n: any) => (
+                      <Link key={n.id} to="/notes/$id" params={{ id: n.id }}>
+                        <Card className="overflow-hidden transition-shadow hover:shadow-md">
+                          <div className="aspect-square bg-muted">
+                            {n.coverImageUrl ? (
+                              <img
+                                src={n.coverImageUrl}
+                                alt={n.title}
+                                className="h-full w-full object-cover"
+                              />
+                            ) : (
+                              <div className="flex h-full items-center justify-center text-muted-foreground">
+                                No image
+                              </div>
+                            )}
+                          </div>
+                          <CardContent className="p-3">
+                            <div className="space-y-2">
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="text-sm font-semibold">{n.title}</div>
+                                <Badge className={n.listing_type === "rent" ? "bg-blue-500 text-white text-xs" : "text-xs"}>
+                                  {n.listing_type === "rent" ? "For Rent" : "For Sale"}
+                                </Badge>
+                              </div>
+                              <div className="text-xs text-muted-foreground">{n.category}</div>
+                              {n.listing_type === "rent" && n.daily_rental_price ? (
+                                <div className="text-sm font-semibold text-primary">
+                                  {formatInr(Number(n.daily_rental_price))} / day
+                                </div>
+                              ) : n.is_free ? (
+                                <div className="text-sm font-semibold text-primary">Free</div>
+                              ) : (
+                                <div className="text-sm font-semibold text-primary">Paid</div>
+                              )}
+                              {n.listing_type === "rent" && n.rental_duration_days && (
+                                <div className="text-xs text-muted-foreground">
+                                  Max {n.rental_duration_days} days
+                                </div>
+                              )}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </Link>
+                    ))}
+                  </div>
+                ) : (
+                  <Card className="border-dashed">
+                    <CardContent className="py-12 text-center text-sm text-muted-foreground">
+                      No active notes listed yet.
                     </CardContent>
                   </Card>
                 )}
