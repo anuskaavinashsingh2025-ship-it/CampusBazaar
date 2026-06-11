@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
   BadgeCheck,
@@ -46,6 +46,7 @@ function SellerPage() {
   const { slug } = Route.useParams();
   const { user } = useAuth();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [tab, setTab] = useState<"products" | "rentals" | "notes" | "reviews" | "completed">("products");
 
   const { data: seller, isLoading } = useQuery({
@@ -431,7 +432,7 @@ function SellerPage() {
           "id,title,price,category,custom_category,condition,is_digital,is_free,status,seller_id,updated_at",
         )
         .eq("seller_id", seller.user_id)
-        .eq("status", "sold")
+        .in("status", ["rented_out", "unavailable"])
         .order("updated_at", { ascending: false })
         .limit(12);
       if (error) throw error;
@@ -468,7 +469,8 @@ function SellerPage() {
           is_free: boolean;
           seller_id: string;
           updated_at: string;
-        }): ProductCardModel & { updated_at: string } => ({
+          status: string;
+        }): ProductCardModel & { updated_at: string; status: string } => ({
           id: p.id,
           title: p.title,
           price: Number(p.price),
@@ -485,6 +487,7 @@ function SellerPage() {
           },
           coverImageUrl: imageMap.get(p.id) ?? null,
           updated_at: p.updated_at,
+          status: p.status,
         }),
       );
     },
@@ -574,7 +577,7 @@ function SellerPage() {
           .from("notes_listings" as unknown as keyof Database["public"]["Tables"])
           .select("id")
           .eq("seller_id", seller.user_id)
-          .eq("status", "sold"),
+          .in("status", ["rented_out", "unavailable"]),
         supabase
           .from("food_listings" as unknown as keyof Database["public"]["Tables"])
           .select("id")
@@ -1081,12 +1084,63 @@ function SellerPage() {
                             </Link>
                             <div className="absolute left-2 top-2 z-30">
                               <Badge variant="secondary" className="text-[10px]">
-                                Completed
+                                {r.status === 'rented_out' ? 'Rented Out' : 'Unavailable'}
                               </Badge>
                             </div>
                             <div className="absolute bottom-2 right-2 z-30 text-[10px] text-muted-foreground">
                               {new Date(r.updated_at).toLocaleDateString()}
                             </div>
+                            {user?.id === seller.user_id && r.status === 'rented_out' && (
+                              <div className="absolute bottom-2 left-2 z-30 flex gap-1">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 text-[10px] px-2 bg-background"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    void supabase
+                                      .from("rental_listings")
+                                      .update({ status: "available" })
+                                      .eq("id", r.id)
+                                      .then(({ error }) => {
+                                        if (error) {
+                                          toast.error("Failed to make available");
+                                        } else {
+                                          toast.success("Made available again");
+                                          void queryClient.invalidateQueries({ queryKey: ["seller_completed_rentals"] });
+                                          void queryClient.invalidateQueries({ queryKey: ["rentals"] });
+                                        }
+                                      });
+                                  }}
+                                >
+                                  Make Available
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 text-[10px] px-2 bg-background"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    void supabase
+                                      .from("rental_listings")
+                                      .update({ status: "unavailable" })
+                                      .eq("id", r.id)
+                                      .then(({ error }) => {
+                                        if (error) {
+                                          toast.error("Failed to mark unavailable");
+                                        } else {
+                                          toast.success("Marked as unavailable");
+                                          void queryClient.invalidateQueries({ queryKey: ["seller_completed_rentals"] });
+                                        }
+                                      });
+                                  }}
+                                >
+                                  Mark Unavailable
+                                </Button>
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -1105,12 +1159,63 @@ function SellerPage() {
                             </Link>
                             <div className="absolute left-2 top-2 z-30">
                               <Badge variant="secondary" className="text-[10px]">
-                                Completed
+                                {n.status === 'rented_out' ? 'Rented Out' : n.status === 'unavailable' ? 'Unavailable' : 'Completed'}
                               </Badge>
                             </div>
                             <div className="absolute bottom-2 right-2 z-30 text-[10px] text-muted-foreground">
                               {new Date(n.updated_at).toLocaleDateString()}
                             </div>
+                            {user?.id === seller.user_id && n.status === 'rented_out' && (
+                              <div className="absolute bottom-2 left-2 z-30 flex gap-1">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 text-[10px] px-2 bg-background"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    void supabase
+                                      .from("notes_listings")
+                                      .update({ status: "available" })
+                                      .eq("id", n.id)
+                                      .then(({ error }) => {
+                                        if (error) {
+                                          toast.error("Failed to make available");
+                                        } else {
+                                          toast.success("Made available again");
+                                          void queryClient.invalidateQueries({ queryKey: ["seller_completed_notes"] });
+                                          void queryClient.invalidateQueries({ queryKey: ["notes", "listings"] });
+                                        }
+                                      });
+                                  }}
+                                >
+                                  Make Available
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 text-[10px] px-2 bg-background"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    void supabase
+                                      .from("notes_listings")
+                                      .update({ status: "unavailable" })
+                                      .eq("id", n.id)
+                                      .then(({ error }) => {
+                                        if (error) {
+                                          toast.error("Failed to mark unavailable");
+                                        } else {
+                                          toast.success("Marked as unavailable");
+                                          void queryClient.invalidateQueries({ queryKey: ["seller_completed_notes"] });
+                                        }
+                                      });
+                                  }}
+                                >
+                                  Mark Unavailable
+                                </Button>
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>

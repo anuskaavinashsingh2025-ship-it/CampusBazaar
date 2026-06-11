@@ -4,6 +4,7 @@ import { ArrowLeft, Archive, Loader2, Star, Clock, CheckCircle2, RotateCcw, Undo
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
+import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import {
   fetchRentalRequestStatus,
@@ -133,6 +134,28 @@ function ChatThreadPage() {
     void fetchStatus();
   }, [conversation]);
 
+  useEffect(() => {
+    const checkNotesType = async () => {
+      if (!conversation || conversation.context_type !== "notes" || !conversation.request_id) {
+        setIsNotesRental(false);
+        return;
+      }
+      try {
+        // Check if the request_id belongs to notes_requests (rental) or notes_purchase_requests (purchase)
+        const { data: rentalRequest } = await supabase
+          .from("notes_requests")
+          .select("id")
+          .eq("id", conversation.request_id)
+          .maybeSingle();
+        setIsNotesRental(!!rentalRequest);
+      } catch (err) {
+        console.error("Failed to check notes type:", err);
+        setIsNotesRental(false);
+      }
+    };
+    void checkNotesType();
+  }, [conversation]);
+
   if (loadingConv || loadingMsgs) {
     return (
       <div className="flex justify-center py-20">
@@ -158,14 +181,14 @@ function ChatThreadPage() {
   const isAutoArchived = conversation.status === "auto_archived";
   const isCompletionPending = conversation.status === "completion_pending";
   const isRental = conversation.context_type === "rental";
-  const isNotesRental = conversation.context_type === "notes";
-  const isFood = conversation.context_type === "food";
   const isNotes = conversation.context_type === "notes";
+  const isFood = conversation.context_type === "food";
   const isRequest = conversation.context_type === "food" || conversation.context_type === "notes";
   const isSeller = conversation.seller_id === user?.id;
   const isBuyer = conversation.buyer_id === user?.id;
   const isCompletionRequester = conversation.completion_requested_by === user?.id;
   const isCompletionConfirmer = isCompletionPending && !isCompletionRequester;
+  const [isNotesRental, setIsNotesRental] = useState(false);
 
   const STATUS_STYLES: Record<string, string> = {
     pending: "bg-yellow-100 text-yellow-800",
@@ -234,7 +257,7 @@ function ChatThreadPage() {
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <span className="text-sm font-medium">Conversation</span>
-        {(isRental || isNotesRental) && rentalStatus && (
+        {(isRental || (isNotes && isNotesRental)) && rentalStatus && (
           <Badge className={cn("text-[10px] capitalize", STATUS_STYLES[rentalStatus] || "bg-slate-100 text-slate-700")}>
             {rentalStatus.replace(/_/g, " ")}
           </Badge>
@@ -257,7 +280,7 @@ function ChatThreadPage() {
             otherUserId={otherUserId!}
             listingTitle={conversation.listing_title}
           />
-          {(isRental || isNotesRental) && rentalStatus && (
+          {(isRental || (isNotes && isNotesRental)) && rentalStatus && (
             <>
               {isSeller && rentalStatus === "accepted" && (
                 <Button
@@ -291,8 +314,8 @@ function ChatThreadPage() {
               )}
             </>
           )}
-          {/* Two-party completion for product, food, and notes chats */}
-          {!isRental && !isNotesRental && conversation.status === "active" && (
+          {/* Two-party completion for product, food, and notes purchase chats */}
+          {conversation.status === "active" && !isNotesRental && (
             <Button
               variant="ghost"
               size="sm"

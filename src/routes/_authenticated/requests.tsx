@@ -526,6 +526,7 @@ function RentalRequestsTab({
         requestId: req.id,
         status: "accepted",
         rentalId: req.rental_id,
+        listingStatus: "rented_out",
         notifyUserId: req.buyer_id,
         notificationTitle: "Rental Request Accepted — Chat Unlocked",
         notificationDescription: `Your request for "${req.rental?.title ?? "the item"}" was accepted. You can now chat with the seller.`,
@@ -1191,6 +1192,7 @@ function NotesRequestsTab({
                                 "Rental Request Accepted — Chat Unlocked",
                                 "Your rental request was accepted. You can now chat with the seller.",
                                 req.buyer_id,
+                                "rented_out",
                               )
                             }
                           >

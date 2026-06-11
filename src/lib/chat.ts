@@ -868,7 +868,18 @@ export function useConfirmConversationCompletion(userId: string | null | undefin
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (conversationId: string) => {
-      const { error } = await supabase
+      const { data: conversation, error: conversationError } = await supabase
+  .from(CONVERSATIONS_TABLE)
+  .select("id, context_type, context_id, request_id")
+  .eq("id", conversationId)
+  .single();
+  if (conversationError) throw conversationError;
+
+  console.log("context_type =", conversation.context_type);
+console.log("context_id =", conversation.context_id);
+console.log("request_id =", conversation.request_id);
+
+   const { error } = await supabase
         .from(CONVERSATIONS_TABLE)
         .update({
           status: "completed",
@@ -879,7 +890,116 @@ export function useConfirmConversationCompletion(userId: string | null | undefin
           completion_requested_at: null,
         })
         .eq("id", conversationId);
-      if (error) throw error;
+
+         if (error) throw error;
+
+  if (conversation.context_type === "product") {
+  const { error: productRequestError } = await supabase
+  .from("product_requests")
+  .update({ status: "completed" })
+  .eq("id", conversation.request_id);
+
+if (productRequestError) {
+  console.error("Product request update failed", productRequestError);
+}
+
+  const { error: productError } = await supabase
+  .from("product_listings")
+  .update({ status: "sold" })
+  .eq("id", conversation.context_id);
+
+if (productError) {
+  console.error("Product update failed", productError);
+}
+}
+if (conversation.context_type === "rental") {
+ const { error: rentalRequestError } = await supabase
+  .from("rental_requests")
+  .update({ status: "completed" })
+  .eq("id", conversation.request_id);
+
+if (rentalRequestError) {
+  console.error("Rental request update failed", rentalRequestError);
+}
+
+ const { error: rentalError } = await supabase
+  .from("rental_listings")
+  .update({ status: "rented_out" })
+  .eq("id", conversation.context_id);
+
+if (rentalError) {
+  console.error("Rental update failed", rentalError);
+}
+}
+if (conversation.context_type === "food") {
+ const { error: foodOrderError } = await supabase
+  .from("food_orders")
+  .update({ status: "completed" })
+  .eq("id", conversation.request_id);
+
+if (foodOrderError) {
+  console.error("Food order update failed", foodOrderError);
+}
+
+ const { error: foodError } = await supabase
+  .from("food_listings")
+  .update({ status: "sold" })
+  .eq("id", conversation.context_id);
+
+if (foodError) {
+  console.error("Food update failed", foodError);
+}
+}
+if (conversation.context_type === "notes") {
+  // Check if this is a notes rental or notes purchase
+  const { data: rentalRequest } = await supabase
+    .from("notes_requests")
+    .select("id")
+    .eq("id", conversation.request_id)
+    .maybeSingle();
+
+  if (rentalRequest) {
+    // This is a notes rental - update notes_requests and notes_listings to rented_out
+    const { error: notesRentalError } = await supabase
+      .from("notes_requests")
+      .update({ status: "completed" })
+      .eq("id", conversation.request_id);
+
+    if (notesRentalError) {
+      console.error("Notes rental request update failed", notesRentalError);
+    }
+
+    const { error: notesRentalListingError } = await supabase
+      .from("notes_listings")
+      .update({ status: "rented_out" })
+      .eq("id", conversation.context_id);
+
+    if (notesRentalListingError) {
+      console.error("Notes rental listing update failed", notesRentalListingError);
+    }
+  } else {
+    // This is a notes purchase - update notes_purchase_requests and notes_listings to sold
+    const { error: notesPurchaseError } = await supabase
+      .from("notes_purchase_requests")
+      .update({ status: "completed" })
+      .eq("id", conversation.request_id);
+
+    if (notesPurchaseError) {
+      console.error("Notes purchase request update failed", notesPurchaseError);
+    }
+
+    const { error: notesError } = await supabase
+      .from("notes_listings")
+      .update({ status: "sold" })
+      .eq("id", conversation.context_id);
+
+    if (notesError) {
+      console.error("Notes update failed", notesError);
+    }
+  }
+}
+     
+      console.log("Completed conversation:", conversation);
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: conversationsQueryKey(userId ?? null) });

@@ -72,7 +72,7 @@ type NotesRequestRow = {
   branch: string | null;
   status: string;
   created_at: string;
-  requester?: { display_name: string; avatar_url: string | null; is_vit_verified: boolean };
+  requester?: { display_name: string; avatar_url: string | null; is_vit_verified: boolean; slug?: string };
 };
 
 const NOTES_LISTINGS_TABLE = "notes_listings" as unknown as keyof Database["public"]["Tables"];
@@ -245,14 +245,54 @@ function NotesHubPage() {
     queryKey: ["notes", "requests"],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from(NOTES_REQUESTS_TABLE)
-        .select(
-          "id,requester_id,subject,request_type,description,urgency_level,semester,branch,status,created_at,requester:display_name,avatar_url,is_vit_verified",
-        )
-        .order("created_at", { ascending: false })
-        .limit(50);
+  .from("notes_requests")
+  .select("*")
+  .eq("status", "open")
+  .order("created_at", { ascending: false });
+
+console.log(data, error);
       if (error) throw error;
-      return (data ?? []) as unknown as NotesRequestRow[];
+      const rows = (data ?? []) as unknown as NotesRequestRow[];
+      
+      // Fetch seller profiles for all requesters
+      const requesterIds = [...new Set(rows.map((r) => r.requester_id))];
+      const { data: sellers } = await supabase
+        .from("seller_profiles")
+        .select("user_id,slug,display_name,avatar_url")
+        .in("user_id", requesterIds);
+      
+      type SellerProfile = { user_id: string; slug: string; display_name: string; avatar_url: string | null };
+      const sellerMap = new Map<string, SellerProfile>(
+        (sellers ?? []).map((s: SellerProfile) => [
+          s.user_id,
+          { slug: s.slug, display_name: s.display_name, avatar_url: s.avatar_url }
+        ])
+      );
+      
+      // Fetch VIT verification status from profiles
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("id,is_vit_verified")
+        .in("id", requesterIds);
+      
+      type ProfileData = { id: string; is_vit_verified: boolean };
+      const profileMap = new Map<string, boolean>(
+        (profiles ?? []).map((p: ProfileData) => [p.id, p.is_vit_verified])
+      );
+      
+      return rows.map((r) => {
+        const seller = sellerMap.get(r.requester_id);
+        const isVerified = profileMap.get(r.requester_id) ?? r.requester?.is_vit_verified ?? false;
+        return {
+          ...r,
+          requester: {
+            display_name: seller?.display_name || r.requester?.display_name || "Unknown",
+            avatar_url: seller?.avatar_url ?? r.requester?.avatar_url ?? null,
+            is_vit_verified: isVerified,
+            slug: seller?.slug,
+          }
+        };
+      });
     },
     refetchInterval: 5000,
   });
@@ -285,8 +325,21 @@ function NotesHubPage() {
 
     // Filter by tab
     if (requestTab === "open") {
-      base = base.filter((r) => r.requester_id !== user?.id);
-    } else if (requestTab === "my") {
+  console.log("Current User:", user?.id);
+
+  base = base.filter((r) => {
+    console.log(
+      "Request:",
+      r.id,
+      "Requester:",
+      r.requester_id,
+      "Match:",
+      r.requester_id === user?.id
+    );
+
+    return r.requester_id !== user?.id;
+  });
+} else if (requestTab === "my") {
       base = base.filter((r) => r.requester_id === user?.id);
     }
 
@@ -662,63 +715,110 @@ function NotesHubPage() {
                   return (
                     <Card key={r.id} className="border-border/60 shadow-sm hover:shadow-md transition-shadow">
                       <CardContent className="p-3">
-                        <div className="flex gap-3">
-                          <Avatar className="h-10 w-10 shrink-0">
-                            {r.requester?.avatar_url ? (
-                              <AvatarImage
-                                src={`${r.requester.avatar_url}${(r.requester.avatar_url as string).includes("?") ? "&" : "?"}t=${Date.now()}`}
-                                alt=""
-                              />
-                            ) : null}
-                            <AvatarFallback className="text-xs">
-                              {(r.requester?.display_name ?? "U").slice(0, 2).toUpperCase()}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-start justify-between gap-2 mb-1">
-                              <div className="flex items-center gap-1.5">
-                                <span className="text-xs">{badge.emoji}</span>
-                                <h3 className="text-sm font-semibold line-clamp-1">{r.subject}</h3>
+                        {/* Header */}
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            {r.requester?.slug ? (
+                              <Link to="/seller/$slug" params={{ slug: r.requester.slug }} className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+                                <Avatar className="h-7 w-7">
+                                  {r.requester?.avatar_url ? (
+                                    <AvatarImage
+                                      src={`${r.requester.avatar_url}${(r.requester.avatar_url as string).includes("?") ? "&" : "?"}t=${Date.now()}`}
+                                      alt=""
+                                    />
+                                  ) : null}
+                                  <AvatarFallback className="text-[10px]">
+                                    {(r.requester?.display_name ?? "U").slice(0, 2).toUpperCase()}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <div className="flex items-center gap-1">
+                                  <span className="text-xs font-medium text-foreground hover:underline">
+                                    {r.requester?.display_name ?? "Unknown"}
+                                  </span>
+                                  {r.requester?.is_vit_verified && (
+                                    <CheckCircle2 className="h-3 w-3 text-emerald-500" />
+                                  )}
+                                </div>
+                              </Link>
+                            ) : (
+                              <div className="flex items-center gap-2">
+                                <Avatar className="h-7 w-7">
+                                  {r.requester?.avatar_url ? (
+                                    <AvatarImage
+                                      src={`${r.requester.avatar_url}${(r.requester.avatar_url as string).includes("?") ? "&" : "?"}t=${Date.now()}`}
+                                      alt=""
+                                    />
+                                  ) : null}
+                                  <AvatarFallback className="text-[10px]">
+                                    {(r.requester?.display_name ?? "U").slice(0, 2).toUpperCase()}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <div className="flex items-center gap-1">
+                                  <span className="text-xs font-medium text-foreground">
+                                    {r.requester?.display_name ?? "Unknown"}
+                                  </span>
+                                  {r.requester?.is_vit_verified && (
+                                    <CheckCircle2 className="h-3 w-3 text-emerald-500" />
+                                  )}
+                                </div>
                               </div>
-                              <Badge className={`text-[10px] ${badge.className}`}>{badge.label}</Badge>
-                            </div>
-                            {neededBy && (
-                              <Badge variant="outline" className="text-[10px] mb-2">
-                                {neededBy}
-                              </Badge>
-                            )}
-                            <p className="text-xs text-muted-foreground mb-1">
-                              {r.request_type} · {r.branch ?? "Any Branch"} · {r.semester ?? "Any Semester"}
-                            </p>
-                            <p className="text-xs text-muted-foreground line-clamp-2 mb-2">{r.description}</p>
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-1.5">
-                                <span className="text-xs font-medium">{r.requester?.display_name ?? "Anonymous"}</span>
-                                {r.requester?.is_vit_verified && (
-                                  <CheckCircle2 className="h-3 w-3 text-emerald-500" />
-                                )}
-                              </div>
-                              <span className="text-[10px] text-muted-foreground">{timeAgo(r.created_at)}</span>
-                            </div>
-                            {requestTab === "open" && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="w-full mt-3"
-                                onClick={() => handleRespond(r)}
-                                disabled={respond.isPending || (!!user && user.id === r.requester_id)}
-                              >
-                                {respond.isPending ? (
-                                  <>
-                                    <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
-                                    Opening chat…
-                                  </>
-                                ) : (
-                                  "I Have This"
-                                )}
-                              </Button>
                             )}
                           </div>
+                          <Badge className={`text-[10px] ${badge.className}`}>{badge.label}</Badge>
+                        </div>
+
+                        {/* Body */}
+                        <div className="mb-2">
+                          <h3 className="text-sm font-semibold text-foreground mb-1">{r.subject}</h3>
+                          {neededBy && (
+                            <Badge variant="outline" className="text-[10px] mb-1">
+                              {neededBy}
+                            </Badge>
+                          )}
+                          <p className="text-xs text-muted-foreground mb-1">
+                            {r.request_type} · {r.branch ?? "Any Branch"} · {r.semester ?? "Any Semester"}
+                          </p>
+                          <p className="text-xs text-muted-foreground line-clamp-2">{r.description}</p>
+                        </div>
+
+                        {/* Footer */}
+                        <div className="flex items-center justify-between pt-2 border-t border-border/50">
+                          <span className="text-[10px] text-muted-foreground">{timeAgo(r.created_at)}</span>
+                          {requestTab === "open" && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 text-xs px-3"
+                              onClick={() => handleRespond(r)}
+                              disabled={respond.isPending || (!!user && user.id === r.requester_id)}
+                            >
+                              {respond.isPending ? (
+                                <>
+                                  <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                                  Opening…
+                                </>
+                              ) : (
+                                "I Have This"
+                              )}
+                            </Button>
+                          )}
+                          {requestTab === "my" && (
+                            <div className="flex items-center gap-2">
+                              <Badge variant={r.status === "open" ? "default" : "secondary"} className="text-[10px]">
+                                {r.status === "open" ? "Open" : r.status}
+                              </Badge>
+                              {r.status === "open" && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-7 text-xs px-2"
+                                  onClick={() => handleMarkFulfilled(r)}
+                                >
+                                  Mark Fulfilled
+                                </Button>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </CardContent>
                     </Card>
