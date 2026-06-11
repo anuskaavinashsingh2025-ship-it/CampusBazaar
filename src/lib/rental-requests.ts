@@ -314,17 +314,43 @@ export function useUpdateRentalRequest() {
       console.log("[useUpdateRentalRequest] Status updated to:", input.status);
 
       if (input.listingStatus && input.rentalId) {
-        const isAvailable = input.listingStatus === "available";
-        const isRented = input.listingStatus === "rented_out";
-        const { error: listingErr } = await supabase
+        const nextStatus =
+          input.listingStatus === "available"
+            ? "available"
+            : input.listingStatus === "rented_out"
+              ? "rented_out"
+              : "unavailable";
+
+        const { data: existingListing, error: existingErr } = await supabase
           .from(RENTALS_TABLE)
-          .update({ is_available: isAvailable, is_rented: isRented })
-          .eq("id", input.rentalId);
+          .select("id,status")
+          .eq("id", input.rentalId)
+          .maybeSingle();
+
+        if (existingErr) {
+          console.error("[useUpdateRentalRequest] Listing lookup error:", existingErr);
+          throw existingErr;
+        }
+
+        const { data: listingData, error: listingErr } = await supabase
+          .from(RENTALS_TABLE)
+          .update({ status: nextStatus })
+          .eq("id", input.rentalId)
+          .select("id,status")
+          .single();
+
         if (listingErr) {
           console.error("[useUpdateRentalRequest] Listing update error:", listingErr);
           throw listingErr;
         }
-        console.log("[useUpdateRentalRequest] Listing updated:", { isAvailable, isRented });
+
+        console.debug("[useUpdateRentalRequest] Listing status update", {
+          requestId: input.requestId,
+          listingId: input.rentalId,
+          oldStatus: (existingListing as { status?: string } | null)?.status ?? null,
+          newStatus: nextStatus,
+          dbResponse: listingData,
+        });
       }
 
       if (

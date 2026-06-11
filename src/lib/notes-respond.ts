@@ -96,6 +96,54 @@ export function useRespondToNotesRequest() {
 
       console.log("[NOTES REQUEST] Conversation ID", conversationId);
 
+      const { data: authUserData, error: authUserErr } = await supabase.auth.getUser();
+      const authUserId = authUserData.user?.id ?? null;
+      if (authUserErr) {
+        console.error("[NOTES REQUEST] Auth user lookup failed", authUserErr);
+        throw authUserErr;
+      }
+      if (!authUserId) {
+        throw new Error("You must be signed in to open chat.");
+      }
+
+      const { data: conversationRecord, error: conversationLookupErr } = await supabase
+        .from("conversations" as never)
+        .select("id, buyer_id, seller_id, status")
+        .eq("id", conversationId)
+        .maybeSingle();
+
+      if (conversationLookupErr) {
+        console.error(
+          "[NOTES REQUEST] Conversation lookup failed before message insert",
+          conversationLookupErr,
+        );
+      }
+
+      if (!conversationRecord) {
+        console.warn(
+          "[NOTES REQUEST] Follow-up conversation lookup returned null; continuing with the RPC conversation ID",
+          {
+            conversationId,
+            authUid: authUserId,
+          },
+        );
+      } else {
+        const isAuthenticatedParticipant =
+          conversationRecord.buyer_id === authUserId || conversationRecord.seller_id === authUserId;
+
+        if (!isAuthenticatedParticipant) {
+          throw new Error("Authenticated user is not a participant in this conversation.");
+        }
+
+        console.log("[NOTES REQUEST] Message insert context", {
+          conversation_id: conversationId,
+          seller_id: conversationRecord.seller_id,
+          buyer_id: conversationRecord.buyer_id,
+          sender_id: authUserId,
+          auth_uid: authUserId,
+        });
+      }
+
       await createTransactionNotification({
         receiverId: input.requestCreatorId,
         senderId: input.responderId,
@@ -135,9 +183,17 @@ export function useRespondToNotesRequest() {
         // First time the conversation is being opened — insert a system
         // message from the requester ("self") so the thread is never
         // visually empty when the buyer opens the chat.
+        console.log("[NOTES REQUEST] Inserting system message", {
+          conversation_id: conversationId,
+          seller_id: input.responderId,
+          buyer_id: input.requestCreatorId,
+          sender_id: authUserId,
+          auth_uid: authUserId,
+        });
+
         const { error: sysErr } = await supabase.from(MESSAGES_TABLE).insert({
           conversation_id: conversationId,
-          sender_id: input.requestCreatorId,
+          sender_id: authUserId,
           message_type: "text",
           content: INITIAL_SYSTEM_MESSAGE,
         });
@@ -166,9 +222,18 @@ export function useRespondToNotesRequest() {
       const responderHasSentBefore = (responderPrevMsgs ?? []).length > 0;
       if (!responderHasSentBefore) {
         const autoMessage = buildAutoFirstMessage(input.requestSubject);
+
+        console.log("[NOTES REQUEST] Inserting auto first message", {
+          conversation_id: conversationId,
+          seller_id: input.responderId,
+          buyer_id: input.requestCreatorId,
+          sender_id: authUserId,
+          auth_uid: authUserId,
+        });
+
         const { error: autoErr } = await supabase.from(MESSAGES_TABLE).insert({
           conversation_id: conversationId,
-          sender_id: input.responderId,
+          sender_id: authUserId,
           message_type: "text",
           content: autoMessage,
         });
@@ -185,7 +250,7 @@ export function useRespondToNotesRequest() {
             .update({
               last_message_at: new Date().toISOString(),
               last_message_preview: autoMessage,
-              last_message_sender_id: input.responderId,
+              last_message_sender_id: authUserId,
             } as never)
             .eq("id" as never, conversationId as never);
         } catch (updErr) {

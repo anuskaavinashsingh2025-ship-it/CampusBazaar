@@ -42,7 +42,11 @@ export function ChatSellerButton({
       return;
     }
     if (!chatUnlocked) {
-      toast.message("Chat unlocks after the seller accepts your request.");
+      if (contextType === "food") {
+        toast.message("Place an order first to start chatting with this seller.");
+      } else {
+        toast.message("Chat unlocks after the seller accepts your request.");
+      }
       return;
     }
 

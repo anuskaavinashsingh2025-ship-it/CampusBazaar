@@ -1402,7 +1402,15 @@ export type Database = {
       message_delivery_status: "sent" | "delivered" | "read";
       message_type: "text" | "image";
       notes_listing_type: "sell" | "rent";
-      notes_purchase_status: "pending" | "accepted" | "rejected" | "completed" | "cancelled";
+      notes_purchase_status:
+        | "pending"
+        | "accepted"
+        | "rejected"
+        | "completed"
+        | "cancelled"
+        | "returned"
+        | "active_rental"
+        | "return_requested";
       notes_request_status: "open" | "fulfilled" | "expired" | "closed";
       notes_status: "available" | "rented_out" | "unavailable" | "hidden";
       notification_module:
@@ -1423,7 +1431,9 @@ export type Database = {
         | "rejected"
         | "returned"
         | "completed"
-        | "cancelled";
+        | "cancelled"
+        | "active_rental"
+        | "return_requested";
       rental_status: "available" | "rented_out" | "unavailable";
       report_status: "pending" | "resolved" | "dismissed";
       report_target_type: "product" | "seller" | "rental" | "food" | "notes";
@@ -1573,7 +1583,16 @@ export const Constants = {
       message_delivery_status: ["sent", "delivered", "read"],
       message_type: ["text", "image"],
       notes_listing_type: ["sell", "rent"],
-      notes_purchase_status: ["pending", "accepted", "rejected", "completed", "cancelled"],
+      notes_purchase_status: [
+        "pending",
+        "accepted",
+        "rejected",
+        "completed",
+        "cancelled",
+        "returned",
+        "active_rental",
+        "return_requested",
+      ],
       notes_request_status: ["open", "fulfilled", "expired", "closed"],
       notes_status: ["available", "rented_out", "unavailable", "hidden"],
       notification_module: [
@@ -1596,6 +1615,8 @@ export const Constants = {
         "returned",
         "completed",
         "cancelled",
+        "active_rental",
+        "return_requested",
       ],
       rental_status: ["available", "rented_out", "unavailable"],
       report_status: ["pending", "resolved", "dismissed"],

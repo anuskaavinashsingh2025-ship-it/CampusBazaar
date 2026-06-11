@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
   ChevronDown,
@@ -14,6 +14,7 @@ import {
   Layers,
   Package,
   Archive,
+  CheckCircle2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -30,6 +31,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { HubNavStrip } from "@/components/hub-nav-strip";
 import { cn } from "@/lib/utils";
@@ -70,10 +72,17 @@ type NotesRequestRow = {
   branch: string | null;
   status: string;
   created_at: string;
+  requester?: { display_name: string; avatar_url: string | null; is_vit_verified: boolean };
 };
 
 const NOTES_LISTINGS_TABLE = "notes_listings" as unknown as keyof Database["public"]["Tables"];
 const NOTES_REQUESTS_TABLE = "notes_requests" as unknown as keyof Database["public"]["Tables"];
+const ACTIVE_NOTES_REQUEST_STATUSES = ["open"] as const;
+const HIDDEN_NOTES_REQUEST_STATUSES = new Set([
+  "fulfilled",
+  "expired",
+  "closed",
+]);
 
 const CATEGORY_OPTIONS = [
   { key: "Handwritten Notes", icon: FileText, color: "bg-blue-100 text-blue-600" },
@@ -86,11 +95,13 @@ const CATEGORY_OPTIONS = [
 
 function NotesHubPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { user } = useAuth();
   const [query, setQuery] = useState("");
   const [tab, setTab] = useState<"sell" | "rent" | "requests">("sell");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [visibleCount, setVisibleCount] = useState(12);
+  const [requestTab, setRequestTab] = useState<"open" | "my">("open");
 
   // Notes Request → Chat integration.
   // When a seller clicks "Respond" on a request, this hook:
@@ -149,6 +160,8 @@ function NotesHubPage() {
         .eq("id", r.id);
 
       if (error) throw error;
+
+      await queryClient.invalidateQueries({ queryKey: ["notes", "requests"] });
 
       // Send notification to the request owner
       await createNotification({
@@ -234,9 +247,8 @@ function NotesHubPage() {
       const { data, error } = await supabase
         .from(NOTES_REQUESTS_TABLE)
         .select(
-          "id,requester_id,subject,request_type,description,urgency_level,semester,branch,status,created_at",
+          "id,requester_id,subject,request_type,description,urgency_level,semester,branch,status,created_at,requester:display_name,avatar_url,is_vit_verified",
         )
-        .eq("status", "open")
         .order("created_at", { ascending: false })
         .limit(50);
       if (error) throw error;
@@ -267,7 +279,17 @@ function NotesHubPage() {
 
   const filteredRequests = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const base = requests ?? [];
+    let base = (requests ?? []).filter(
+      (r) => !HIDDEN_NOTES_REQUEST_STATUSES.has(String(r.status ?? "").toLowerCase()),
+    );
+
+    // Filter by tab
+    if (requestTab === "open") {
+      base = base.filter((r) => r.requester_id !== user?.id);
+    } else if (requestTab === "my") {
+      base = base.filter((r) => r.requester_id === user?.id);
+    }
+
     if (!q) return base;
     return base.filter((r) => {
       return (
@@ -276,10 +298,42 @@ function NotesHubPage() {
         r.description.toLowerCase().includes(q)
       );
     });
-  }, [requests, query]);
+  }, [requests, query, requestTab, user?.id]);
 
   const formatInr = (amount: number) =>
     new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(amount);
+
+  const urgencyBadge = (level: string) => {
+    const l = level.toLowerCase();
+    if (l.includes("urgent")) return { emoji: "🔴", label: "Urgent", className: "bg-red-50 text-red-700 border-red-200" };
+    if (l.includes("high")) return { emoji: "🟠", label: "High", className: "bg-orange-50 text-orange-700 border-orange-200" };
+    return { emoji: "🟢", label: "Normal", className: "bg-green-50 text-green-700 border-green-200" };
+  };
+
+  const getNeededByChip = (urgency: string) => {
+    const l = urgency.toLowerCase();
+    if (l.includes("today")) return "Needed Today";
+    if (l.includes("tonight")) return "Needed Tonight";
+    if (l.includes("tomorrow")) return "Needed Tomorrow";
+    if (l.includes("cat")) return "Needed Before CAT";
+    if (l.includes("exam")) return "Needed Before Exam";
+    return null;
+  };
+
+  const timeAgo = (iso: string) => {
+    const h = Math.floor((Date.now() - new Date(iso).getTime()) / (1000 * 60 * 60));
+    if (h < 1) return "Just now";
+    if (h < 24) return `${h}h ago`;
+    return `${Math.floor(h / 24)}d ago`;
+  };
+
+  const getNotesBadgeLabel = (
+    mode: "sell" | "rent" | "requests",
+    listingType?: NotesListingRow["listing_type"],
+  ) => {
+    if (mode === "requests") return "Requested";
+    return listingType === "rent" ? "For Rent" : "For Sale";
+  };
 
   const openDetailsForm = (mode: "sell" | "rent" | "requests") => {
     if (!user) {
@@ -341,7 +395,7 @@ function NotesHubPage() {
           <div className="mb-3 flex items-center justify-between">
             <h2 className="font-semibold">Browse Categories</h2>
           </div>
-          <div className="flex gap-3 overflow-x-auto pb-2">
+          <div className="sticky top-0 z-10 flex gap-3 overflow-x-auto pb-2 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
             <button
               type="button"
               onClick={() => setCategoryFilter("all")}
@@ -453,7 +507,9 @@ function NotesHubPage() {
                         <div className="space-y-2 p-3">
                           <div className="flex items-start justify-between gap-2">
                             <div className="text-sm font-semibold">{l.title}</div>
-                            <Badge className="bg-blue-500 text-white text-xs">For Rent</Badge>
+                            <Badge className="bg-emerald-500 text-white text-xs">
+                              {getNotesBadgeLabel(tab, l.listing_type)}
+                            </Badge>
                           </div>
                           <div className="text-xs text-muted-foreground line-clamp-2">
                             {l.description}
@@ -548,7 +604,12 @@ function NotesHubPage() {
                           </div>
                         </div>
                         <div className="space-y-2 p-3">
-                          <div className="text-sm font-semibold">{l.title}</div>
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="text-sm font-semibold">{l.title}</div>
+                            <Badge className="bg-sky-500 text-white text-xs">
+                              {getNotesBadgeLabel(tab, l.listing_type)}
+                            </Badge>
+                          </div>
                           <div className="text-xs text-muted-foreground line-clamp-2">
                             {l.description}
                           </div>
@@ -582,64 +643,100 @@ function NotesHubPage() {
           </TabsContent>
 
           <TabsContent value="requests" className="mt-4">
+            <Tabs value={requestTab} onValueChange={(v) => setRequestTab(v as "open" | "my")} className="mb-4">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="open">Open Requests</TabsTrigger>
+                <TabsTrigger value="my">My Requests</TabsTrigger>
+              </TabsList>
+            </Tabs>
+
             {loadingRequests ? (
               <div className="flex justify-center py-16 text-muted-foreground">
                 <Loader2 className="h-6 w-6 animate-spin" />
               </div>
             ) : filteredRequests.length ? (
               <div className="space-y-3">
-                {filteredRequests.map((r) => (
-                  <Card key={r.id} className="border-border/60 shadow-sm">
-                    <CardContent className="space-y-2 p-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <div className="text-sm font-semibold">{r.subject}</div>
-                          <div className="text-xs text-muted-foreground">{r.request_type}</div>
+                {filteredRequests.map((r) => {
+                  const badge = urgencyBadge(r.urgency_level);
+                  const neededBy = getNeededByChip(r.urgency_level);
+                  return (
+                    <Card key={r.id} className="border-border/60 shadow-sm hover:shadow-md transition-shadow">
+                      <CardContent className="p-3">
+                        <div className="flex gap-3">
+                          <Avatar className="h-10 w-10 shrink-0">
+                            {r.requester?.avatar_url ? (
+                              <AvatarImage
+                                src={`${r.requester.avatar_url}${(r.requester.avatar_url as string).includes("?") ? "&" : "?"}t=${Date.now()}`}
+                                alt=""
+                              />
+                            ) : null}
+                            <AvatarFallback className="text-xs">
+                              {(r.requester?.display_name ?? "U").slice(0, 2).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-start justify-between gap-2 mb-1">
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-xs">{badge.emoji}</span>
+                                <h3 className="text-sm font-semibold line-clamp-1">{r.subject}</h3>
+                              </div>
+                              <Badge className={`text-[10px] ${badge.className}`}>{badge.label}</Badge>
+                            </div>
+                            {neededBy && (
+                              <Badge variant="outline" className="text-[10px] mb-2">
+                                {neededBy}
+                              </Badge>
+                            )}
+                            <p className="text-xs text-muted-foreground mb-1">
+                              {r.request_type} · {r.branch ?? "Any Branch"} · {r.semester ?? "Any Semester"}
+                            </p>
+                            <p className="text-xs text-muted-foreground line-clamp-2 mb-2">{r.description}</p>
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-xs font-medium">{r.requester?.display_name ?? "Anonymous"}</span>
+                                {r.requester?.is_vit_verified && (
+                                  <CheckCircle2 className="h-3 w-3 text-emerald-500" />
+                                )}
+                              </div>
+                              <span className="text-[10px] text-muted-foreground">{timeAgo(r.created_at)}</span>
+                            </div>
+                            {requestTab === "open" && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="w-full mt-3"
+                                onClick={() => handleRespond(r)}
+                                disabled={respond.isPending || (!!user && user.id === r.requester_id)}
+                              >
+                                {respond.isPending ? (
+                                  <>
+                                    <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                                    Opening chat…
+                                  </>
+                                ) : (
+                                  "I Have This"
+                                )}
+                              </Button>
+                            )}
+                          </div>
                         </div>
-                        <Badge variant="secondary">{r.urgency_level}</Badge>
-                      </div>
-                      <div className="text-xs text-muted-foreground">{r.description}</div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleRespond(r)}
-                          disabled={respond.isPending || (!!user && user.id === r.requester_id)}
-                        >
-                          {respond.isPending ? (
-                            <>
-                              <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
-                              Opening chat…
-                            </>
-                          ) : (
-                            "Respond"
-                          )}
-                        </Button>
-                        <Button
-                          size="sm"
-                          onClick={() => handleMarkFulfilled(r)}
-                          disabled={r.status !== "open"}
-                        >
-                          Mark Fulfilled
-                        </Button>
-                        {r.status === "in_progress" && (
-                          <Badge variant="outline" className="text-[10px]">
-                            Chat opened
-                          </Badge>
-                        )}
-                        {r.status === "fulfilled" && (
-                          <Badge variant="secondary" className="text-[10px]">
-                            Fulfilled
-                          </Badge>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
               </div>
             ) : (
-              <div className="py-16 text-center text-sm text-muted-foreground">
-                No requests yet.
+              <div className="flex flex-col items-center py-16 text-center">
+                <BookOpen className="mb-4 h-12 w-12 text-muted-foreground/40" />
+                <p className="text-sm text-muted-foreground">
+                  {requestTab === "open" ? "No Notes Requests Yet" : "No requests yet"}
+                </p>
+                {requestTab === "open" && (
+                  <>
+                    <p className="text-xs text-muted-foreground mb-4">Need notes before CAT? Create a request.</p>
+                    <Button onClick={() => openDetailsForm("requests")}>Create Request</Button>
+                  </>
+                )}
               </div>
             )}
           </TabsContent>

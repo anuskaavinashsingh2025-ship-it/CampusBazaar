@@ -199,24 +199,56 @@ export function useUpdateNotesRental() {
       console.log("[useUpdateNotesRental] Status updated to:", input.status);
 
       if (input.listingStatus) {
-        const { data: reqRow } = await supabase
+        const { data: reqRow, error: reqErr } = await supabase
           .from(REQUESTS_TABLE)
           .select("notes_listing_id")
           .eq("id", input.requestId)
           .maybeSingle();
-        
+
+        if (reqErr) {
+          console.error("[useUpdateNotesRental] Request lookup error:", reqErr);
+          throw reqErr;
+        }
+
         if (reqRow) {
-          const isAvailable = input.listingStatus === "available";
-          const isRented = input.listingStatus === "rented_out";
-          const { error: listingErr } = await supabase
+          const listingId = (reqRow as { notes_listing_id: string }).notes_listing_id;
+          const { data: existingListing, error: existingErr } = await supabase
             .from(NOTES_LISTINGS_TABLE)
-            .update({ is_available: isAvailable, is_rented: isRented })
-            .eq("id", (reqRow as any).notes_listing_id);
+            .select("id,status")
+            .eq("id", listingId)
+            .maybeSingle();
+
+          if (existingErr) {
+            console.error("[useUpdateNotesRental] Listing lookup error:", existingErr);
+            throw existingErr;
+          }
+
+          const nextStatus =
+            input.listingStatus === "available"
+              ? "available"
+              : input.listingStatus === "rented_out"
+                ? "rented_out"
+                : "unavailable";
+
+          const { data: listingData, error: listingErr } = await supabase
+            .from(NOTES_LISTINGS_TABLE)
+            .update({ status: nextStatus })
+            .eq("id", listingId)
+            .select("id,status")
+            .single();
+
           if (listingErr) {
             console.error("[useUpdateNotesRental] Listing update error:", listingErr);
             throw listingErr;
           }
-          console.log("[useUpdateNotesRental] Listing updated:", { isAvailable, isRented });
+
+          console.debug("[useUpdateNotesRental] Listing status update", {
+            requestId: input.requestId,
+            listingId,
+            oldStatus: (existingListing as { status?: string } | null)?.status ?? null,
+            newStatus: nextStatus,
+            dbResponse: listingData,
+          });
         }
       }
 
@@ -342,6 +374,11 @@ export function useUpdateNotesRental() {
       void queryClient.invalidateQueries({ queryKey: ["notes_rentals"] });
       void queryClient.invalidateQueries({ queryKey: ["notes_purchases"] });
       void queryClient.invalidateQueries({ queryKey: ["notes_listing"] });
+      void queryClient.invalidateQueries({ queryKey: ["notes", "listings"] });
+      void queryClient.invalidateQueries({ queryKey: ["marketplace_home", "recommendations", "notes"] });
+      void queryClient.invalidateQueries({ queryKey: ["seller_notes"] });
+      void queryClient.invalidateQueries({ queryKey: ["seller_completed_notes"] });
+      void queryClient.invalidateQueries({ queryKey: ["similar_listings", "notes"] });
       invalidateChatQueries(queryClient);
     },
     onError: (err: unknown) => {

@@ -159,6 +159,9 @@ function ChatThreadPage() {
   const isCompletionPending = conversation.status === "completion_pending";
   const isRental = conversation.context_type === "rental";
   const isNotesRental = conversation.context_type === "notes";
+  const isFood = conversation.context_type === "food";
+  const isNotes = conversation.context_type === "notes";
+  const isRequest = conversation.context_type === "food" || conversation.context_type === "notes";
   const isSeller = conversation.seller_id === user?.id;
   const isBuyer = conversation.buyer_id === user?.id;
   const isCompletionRequester = conversation.completion_requested_by === user?.id;
@@ -288,7 +291,7 @@ function ChatThreadPage() {
               )}
             </>
           )}
-          {/* Two-party completion for product chats */}
+          {/* Two-party completion for product, food, and notes chats */}
           {!isRental && !isNotesRental && conversation.status === "active" && (
             <Button
               variant="ghost"

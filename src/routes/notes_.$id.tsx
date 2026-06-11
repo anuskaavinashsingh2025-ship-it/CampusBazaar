@@ -193,7 +193,7 @@ function NotesDetailsPage() {
     updateRental.mutate(
       {
         requestId: existingRequest.id,
-        status: "returned",
+        status: "return_requested",
         notifyUserId: listing.seller_id,
         notificationTitle: "Notes Returned",
         notificationDescription: "The renter has returned the notes. Please review and mark as available or keep unavailable.",
@@ -313,6 +313,9 @@ function NotesDetailsPage() {
   }
 
   const buyLabel = listing.listing_type === "sell" ? "Buy Notes" : "Rent Notes";
+
+  // Determine if this listing is available for requests based on listing status
+  const isListingAvailable = listing.status === "available";
 
   // Determine which request to use based on listing type
   const existingRequest = listing.listing_type === "rent" ? existingRentalRequest : existingPurchaseRequest;
@@ -493,7 +496,7 @@ function NotesDetailsPage() {
                   <RotateCcw className="h-4 w-4" />
                   {updateRental.isPending ? "Returning..." : "Return Notes"}
                 </Button>
-              ) : listing.listing_type === "rent" && requestStatus === "returned" && user?.id === listing.seller_id ? (
+              ) : listing.listing_type === "rent" && requestStatus === "return_requested" && user?.id === listing.seller_id ? (
                 <div className="flex gap-2">
                   <Button
                     className="gap-2"
@@ -515,10 +518,12 @@ function NotesDetailsPage() {
                 <Button
                   className="gap-2"
                   onClick={openRequest}
-                  disabled={requestStatus === "pending" || requestStatus === "active_rental" || requestStatus === "returned"}
+                  disabled={!isListingAvailable || requestStatus === "pending" || requestStatus === "active_rental" || requestStatus === "return_requested"}
                 >
                   <ShoppingCart className="h-4 w-4" />
-                  {requestStatus === "pending" || requestStatus === "active_rental" || requestStatus === "returned"
+                  {!isListingAvailable
+                    ? "Unavailable"
+                    : requestStatus === "pending" || requestStatus === "active_rental" || requestStatus === "return_requested"
                     ? "Request Pending"
                     : buyLabel}
                 </Button>

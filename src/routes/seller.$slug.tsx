@@ -1172,7 +1172,11 @@ function SellerPage() {
                     Campus member
                   </span>
                 </div>
-                <ReportListingDialog itemType="seller" itemId={seller.user_id} />
+                <ReportListingDialog
+                  itemType="seller"
+                  itemId={seller.user_id}
+                  disabled={user?.id === seller.user_id}
+                />
               </CardContent>
             </Card>
 

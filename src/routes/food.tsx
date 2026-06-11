@@ -10,6 +10,8 @@ import {
   Search,
   ShoppingBag,
   UtensilsCrossed,
+  User,
+  CheckCircle2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -17,6 +19,8 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 import { useAuth } from "@/lib/auth";
 import { useRespondToFoodRequest } from "@/lib/food-respond";
+import { useBuyerFoodOrders } from "@/lib/food-orders";
+import { findConversationForListing, getOrCreateConversation } from "@/lib/chat";
 import { WishlistButton } from "@/components/wishlist/wishlist-button";
 import { CampusBazarLogo } from "@/components/brand/campusbazar-logo";
 import ListingActions from "@/components/listing/listing-actions";
@@ -26,6 +30,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { HubNavStrip } from "@/components/hub-nav-strip";
 
@@ -61,6 +66,7 @@ type FoodRequestRow = {
   urgency_level: string;
   status: string;
   created_at: string;
+  requester?: { display_name: string; avatar_url: string | null; is_vit_verified: boolean };
 };
 
 const FOOD_CATEGORIES = [
@@ -72,6 +78,13 @@ const FOOD_CATEGORIES = [
   "Others",
 ] as const;
 
+const ACTIVE_FOOD_REQUEST_STATUSES = ["open"] as const;
+const HIDDEN_REQUEST_STATUSES = new Set([
+  "fulfilled",
+  "expired",
+  "closed",
+]);
+
 const FOOD_LISTINGS_TABLE = "food_listings" as unknown as keyof Database["public"]["Tables"];
 const FOOD_IMAGES_TABLE = "food_images" as unknown as keyof Database["public"]["Tables"];
 const FOOD_REQUESTS_TABLE = "food_requests" as unknown as keyof Database["public"]["Tables"];
@@ -80,10 +93,12 @@ function FoodHubPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const respond = useRespondToFoodRequest();
+  const { data: buyerFoodOrders = [] } = useBuyerFoodOrders(user?.id);
   const [mode, setMode] = useState<"sell" | "requests">("sell");
   const [query, setQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   const [visibleCount, setVisibleCount] = useState(12);
+  const [requestTab, setRequestTab] = useState<"open" | "my">("open");
 
   const { data: listings, isLoading: loadingListings } = useQuery({
     queryKey: ["food", "listings"],
@@ -150,9 +165,8 @@ function FoodHubPage() {
       const { data, error } = await supabase
         .from(FOOD_REQUESTS_TABLE)
         .select(
-          "id,requester_id,product_name,category,quantity_needed,description,urgency_level,status,created_at",
+          "id,requester_id,product_name,category,quantity_needed,description,urgency_level,status,created_at,requester:display_name,avatar_url,is_vit_verified",
         )
-        .eq("status", "open")
         .order("created_at", { ascending: false })
         .limit(50);
       if (error) throw error;
@@ -176,14 +190,25 @@ function FoodHubPage() {
 
   const filteredRequests = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return requests ?? [];
-    return (requests ?? []).filter(
+    let base = (requests ?? []).filter(
+      (r) => !HIDDEN_REQUEST_STATUSES.has(String(r.status ?? "").toLowerCase()),
+    );
+
+    // Filter by tab
+    if (requestTab === "open") {
+      base = base.filter((r) => r.requester_id !== user?.id);
+    } else if (requestTab === "my") {
+      base = base.filter((r) => r.requester_id === user?.id);
+    }
+
+    if (!q) return base;
+    return base.filter(
       (r) =>
         r.product_name.toLowerCase().includes(q) ||
         r.category.toLowerCase().includes(q) ||
         r.description.toLowerCase().includes(q),
     );
-  }, [requests, query]);
+  }, [requests, query, requestTab, user?.id]);
 
   const formatInr = (amount: number) =>
     new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(amount);
@@ -197,12 +222,21 @@ function FoodHubPage() {
     return { label: `${Math.max(diff, 0)} days left`, className: "bg-red-500 text-white" };
   };
 
-  const urgencyColor = (level: string) => {
+  const urgencyBadge = (level: string) => {
     const l = level.toLowerCase();
-    if (l.includes("urgent")) return "bg-red-500 text-white";
-    if (l.includes("high")) return "bg-orange-500 text-white";
-    if (l.includes("medium")) return "bg-yellow-500 text-white";
-    return "bg-emerald-500 text-white";
+    if (l.includes("urgent")) return { emoji: "🔴", label: "Urgent", className: "bg-red-50 text-red-700 border-red-200" };
+    if (l.includes("high")) return { emoji: "🟠", label: "High", className: "bg-orange-50 text-orange-700 border-orange-200" };
+    return { emoji: "🟢", label: "Normal", className: "bg-green-50 text-green-700 border-green-200" };
+  };
+
+  const getNeededByChip = (urgency: string) => {
+    const l = urgency.toLowerCase();
+    if (l.includes("today")) return "Needed Today";
+    if (l.includes("tonight")) return "Needed Tonight";
+    if (l.includes("tomorrow")) return "Needed Tomorrow";
+    if (l.includes("cat")) return "Needed Before CAT";
+    if (l.includes("exam")) return "Needed Before Exam";
+    return null;
   };
 
   const timeAgo = (iso: string) => {
@@ -219,6 +253,55 @@ function FoodHubPage() {
     }
     if (formMode === "sell") navigate({ to: "/upload-food" });
     else navigate({ to: "/upload-food-request" });
+  };
+
+  const handleFoodChatClick = async (listing: FoodListingRow) => {
+    if (!user) {
+      navigate({ to: "/login" });
+      return;
+    }
+
+    if (user.id === listing.seller_id) {
+      toast.error("You can't chat with yourself.");
+      return;
+    }
+
+    const existingOrder = buyerFoodOrders.find(
+      (order) => order.food_listing_id === listing.id && order.buyer_id === user.id,
+    );
+
+    if (!existingOrder) {
+      toast.message("Place an order first to unlock chat with this seller.");
+      return;
+    }
+
+    try {
+      let conversationId = await findConversationForListing({
+        userId: user.id,
+        contextType: "food",
+        contextId: listing.id,
+      });
+
+      if (!conversationId) {
+        conversationId = await getOrCreateConversation({
+          buyerId: user.id,
+          sellerId: listing.seller_id,
+          contextType: "food",
+          contextId: listing.id,
+          requestId: existingOrder.id,
+          listingTitle: listing.product_name,
+        });
+      }
+
+      if (!conversationId) {
+        toast.error("No conversation found for this listing yet.");
+        return;
+      }
+
+      navigate({ to: "/chats/$id", params: { id: conversationId } });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not open chat");
+    }
   };
 
   const handleRespond = (r: FoodRequestRow) => {
@@ -323,7 +406,7 @@ function FoodHubPage() {
 
         {mode === "sell" && (
           <>
-            <div className="mb-4 flex gap-2 overflow-x-auto pb-1">
+            <div className="sticky top-0 z-10 mb-4 flex gap-2 overflow-x-auto pb-1 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
               <button
                 type="button"
                 onClick={() => setCategoryFilter(null)}
@@ -436,7 +519,7 @@ function FoodHubPage() {
                                 className="h-8 w-8"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  toast.message("Chat coming soon");
+                                  void handleFoodChatClick(l);
                                 }}
                               >
                                 <MessageSquare className="h-4 w-4" />
@@ -478,63 +561,100 @@ function FoodHubPage() {
               </Button>
             </div>
 
+            <Tabs value={requestTab} onValueChange={(v) => setRequestTab(v as "open" | "my")} className="mb-4">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="open">Open Requests</TabsTrigger>
+                <TabsTrigger value="my">My Requests</TabsTrigger>
+              </TabsList>
+            </Tabs>
+
             {loadingRequests ? (
               <div className="flex justify-center py-16">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               </div>
             ) : filteredRequests.length ? (
               <div className="space-y-3">
-                {filteredRequests.map((r) => (
-                  <Card key={r.id} className="border-border/60 shadow-sm">
-                    <CardContent className="space-y-3 p-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <span
-                            className={`mb-2 inline-block rounded-md px-2 py-0.5 text-[10px] font-semibold capitalize ${urgencyColor(r.urgency_level)}`}
-                          >
-                            {r.urgency_level}
-                          </span>
-                          <h3 className="font-semibold">{r.product_name}</h3>
-                          <p className="text-xs text-muted-foreground">
-                            {r.category} · {r.quantity_needed}
-                          </p>
+                {filteredRequests.map((r) => {
+                  const badge = urgencyBadge(r.urgency_level);
+                  const neededBy = getNeededByChip(r.urgency_level);
+                  return (
+                    <Card key={r.id} className="border-border/60 shadow-sm hover:shadow-md transition-shadow">
+                      <CardContent className="p-3">
+                        <div className="flex gap-3">
+                          <Avatar className="h-10 w-10 shrink-0">
+                            {r.requester?.avatar_url ? (
+                              <AvatarImage
+                                src={`${r.requester.avatar_url}${(r.requester.avatar_url as string).includes("?") ? "&" : "?"}t=${Date.now()}`}
+                                alt=""
+                              />
+                            ) : null}
+                            <AvatarFallback className="text-xs">
+                              {(r.requester?.display_name ?? "U").slice(0, 2).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-start justify-between gap-2 mb-1">
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-xs">{badge.emoji}</span>
+                                <h3 className="text-sm font-semibold line-clamp-1">{r.product_name}</h3>
+                              </div>
+                              <Badge className={`text-[10px] ${badge.className}`}>{badge.label}</Badge>
+                            </div>
+                            {neededBy && (
+                              <Badge variant="outline" className="text-[10px] mb-2">
+                                {neededBy}
+                              </Badge>
+                            )}
+                            <p className="text-xs text-muted-foreground mb-1">
+                              {r.category} · {r.quantity_needed}
+                            </p>
+                            <p className="text-xs text-muted-foreground line-clamp-2 mb-2">{r.description}</p>
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-xs font-medium">{r.requester?.display_name ?? "Anonymous"}</span>
+                                {r.requester?.is_vit_verified && (
+                                  <CheckCircle2 className="h-3 w-3 text-emerald-500" />
+                                )}
+                              </div>
+                              <span className="text-[10px] text-muted-foreground">{timeAgo(r.created_at)}</span>
+                            </div>
+                            {requestTab === "open" && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="w-full mt-3"
+                                onClick={() => handleRespond(r)}
+                                disabled={respond.isPending || (!!user && user.id === r.requester_id)}
+                              >
+                                {respond.isPending ? (
+                                  <>
+                                    <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                                    Opening chat…
+                                  </>
+                                ) : (
+                                  "I Have This"
+                                )}
+                              </Button>
+                            )}
+                          </div>
                         </div>
-                        <Badge variant="outline">{timeAgo(r.created_at)}</Badge>
-                      </div>
-                      <p className="text-sm text-muted-foreground line-clamp-2">{r.description}</p>
-                      <div className="flex gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="flex-1"
-                          onClick={() => handleRespond(r)}
-                          disabled={respond.isPending || (!!user && user.id === r.requester_id)}
-                        >
-                          {respond.isPending ? (
-                            <>
-                              <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
-                              Opening chat…
-                            </>
-                          ) : (
-                            "I Have This"
-                          )}
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleRespond(r)}
-                          disabled={respond.isPending || (!!user && user.id === r.requester_id)}
-                        >
-                          <MessageSquare className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
               </div>
             ) : (
-              <div className="py-16 text-center text-sm text-muted-foreground">
-                No open requests yet. Be the first to post one!
+              <div className="flex flex-col items-center py-16 text-center">
+                <Heart className="mb-4 h-12 w-12 text-muted-foreground/40" />
+                <p className="text-sm text-muted-foreground">
+                  {requestTab === "open" ? "No Food Requests Yet" : "No requests yet"}
+                </p>
+                {requestTab === "open" && (
+                  <>
+                    <p className="text-xs text-muted-foreground mb-4">Need something? Create a request.</p>
+                    <Button onClick={() => openForm("request")}>Create Request</Button>
+                  </>
+                )}
               </div>
             )}
           </>

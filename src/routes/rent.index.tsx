@@ -113,11 +113,6 @@ function RentFeedPage() {
   const [minPrice, setMinPrice] = useState("");
   const [maxPrice, setMaxPrice] = useState("");
   const [conditionFilter, setConditionFilter] = useState<string>("all");
-  const [availability, setAvailability] = useState({
-    available: true,
-    rented_out: false,
-    unavailable: false,
-  });
   const [sortBy, setSortBy] = useState("recent");
   const [visibleCount, setVisibleCount] = useState(12);
 
@@ -129,6 +124,7 @@ function RentFeedPage() {
         .select(
           "id,title,rent_price_per_day,category,custom_category,condition,status,seller_id,created_at",
         )
+        .eq("status", "available")
         .order("created_at", { ascending: false });
       if (error) throw error;
 
@@ -170,24 +166,8 @@ function RentFeedPage() {
     refetchInterval: 10000,
   });
 
-  const statusCounts = useMemo(() => {
-    const items = data ?? [];
-    return {
-      available: items.filter((r) => r.status === "available").length,
-      rented_out: items.filter((r) => r.status === "rented_out").length,
-      unavailable: items.filter((r) => r.status === "unavailable").length,
-    };
-  }, [data]);
-
   const filtered = useMemo(() => {
     let items = data ?? [];
-
-    const activeStatuses = Object.entries(availability)
-      .filter(([, v]) => v)
-      .map(([k]) => k);
-    if (activeStatuses.length) {
-      items = items.filter((r) => activeStatuses.includes(r.status));
-    }
 
     if (categoryFilter !== "all") {
       items = items.filter((r) => r.category === categoryFilter);
@@ -226,7 +206,7 @@ function RentFeedPage() {
     }
 
     return items;
-  }, [data, query, categoryFilter, conditionFilter, minPrice, maxPrice, availability, sortBy]);
+  }, [data, query, categoryFilter, conditionFilter, minPrice, maxPrice, sortBy]);
 
   const visible = filtered.slice(0, visibleCount);
 
@@ -376,7 +356,6 @@ function RentFeedPage() {
                   setMinPrice("");
                   setMaxPrice("");
                   setConditionFilter("all");
-                  setAvailability({ available: true, rented_out: false, unavailable: false });
                 }}
               >
                 Clear All
@@ -433,30 +412,6 @@ function RentFeedPage() {
                   ))}
                 </SelectContent>
               </Select>
-            </div>
-
-            <div className="space-y-3">
-              <Label>Availability</Label>
-              {(
-                [
-                  { key: "available" as const, label: "Available" },
-                  { key: "rented_out" as const, label: "Rented Out" },
-                  { key: "unavailable" as const, label: "Unavailable" },
-                ] as const
-              ).map(({ key, label }) => (
-                <div key={key} className="flex items-center gap-2">
-                  <Checkbox
-                    id={`avail-${key}`}
-                    checked={availability[key]}
-                    onCheckedChange={(v) =>
-                      setAvailability((prev) => ({ ...prev, [key]: Boolean(v) }))
-                    }
-                  />
-                  <Label htmlFor={`avail-${key}`} className="text-sm font-normal">
-                    {label} ({statusCounts[key]})
-                  </Label>
-                </div>
-              ))}
             </div>
 
             <div className="space-y-2">

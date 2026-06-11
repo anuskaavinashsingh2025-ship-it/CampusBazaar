@@ -43,6 +43,8 @@ import { Route as AuthenticatedDashboardRouteImport } from './routes/_authentica
 import { Route as AuthenticatedChatsRouteImport } from './routes/_authenticated/chats'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
 import { Route as AuthenticatedChatsIdRouteImport } from './routes/_authenticated/chats_.$id'
+import { Route as AuthenticatedAdminReportsRouteImport } from './routes/_authenticated/admin.reports'
+import { Route as AuthenticatedAdminFeedbackRouteImport } from './routes/_authenticated/admin.feedback'
 
 const TermsRoute = TermsRouteImport.update({
   id: '/terms',
@@ -222,6 +224,18 @@ const AuthenticatedChatsIdRoute = AuthenticatedChatsIdRouteImport.update({
   path: '/chats/$id',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedAdminReportsRoute =
+  AuthenticatedAdminReportsRouteImport.update({
+    id: '/reports',
+    path: '/reports',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
+const AuthenticatedAdminFeedbackRoute =
+  AuthenticatedAdminFeedbackRouteImport.update({
+    id: '/feedback',
+    path: '/feedback',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -234,7 +248,7 @@ export interface FileRoutesByFullPath {
   '/notes': typeof NotesRoute
   '/reset-password': typeof ResetPasswordRoute
   '/terms': typeof TermsRoute
-  '/admin': typeof AuthenticatedAdminRoute
+  '/admin': typeof AuthenticatedAdminRouteWithChildren
   '/chats': typeof AuthenticatedChatsRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/notification-settings': typeof AuthenticatedNotificationSettingsRoute
@@ -256,6 +270,8 @@ export interface FileRoutesByFullPath {
   '/rent/$id': typeof RentIdRoute
   '/seller/$slug': typeof SellerSlugRoute
   '/rent/': typeof RentIndexRoute
+  '/admin/feedback': typeof AuthenticatedAdminFeedbackRoute
+  '/admin/reports': typeof AuthenticatedAdminReportsRoute
   '/chats/$id': typeof AuthenticatedChatsIdRoute
 }
 export interface FileRoutesByTo {
@@ -269,7 +285,7 @@ export interface FileRoutesByTo {
   '/notes': typeof NotesRoute
   '/reset-password': typeof ResetPasswordRoute
   '/terms': typeof TermsRoute
-  '/admin': typeof AuthenticatedAdminRoute
+  '/admin': typeof AuthenticatedAdminRouteWithChildren
   '/chats': typeof AuthenticatedChatsRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/notification-settings': typeof AuthenticatedNotificationSettingsRoute
@@ -291,6 +307,8 @@ export interface FileRoutesByTo {
   '/rent/$id': typeof RentIdRoute
   '/seller/$slug': typeof SellerSlugRoute
   '/rent': typeof RentIndexRoute
+  '/admin/feedback': typeof AuthenticatedAdminFeedbackRoute
+  '/admin/reports': typeof AuthenticatedAdminReportsRoute
   '/chats/$id': typeof AuthenticatedChatsIdRoute
 }
 export interface FileRoutesById {
@@ -306,7 +324,7 @@ export interface FileRoutesById {
   '/notes': typeof NotesRoute
   '/reset-password': typeof ResetPasswordRoute
   '/terms': typeof TermsRoute
-  '/_authenticated/admin': typeof AuthenticatedAdminRoute
+  '/_authenticated/admin': typeof AuthenticatedAdminRouteWithChildren
   '/_authenticated/chats': typeof AuthenticatedChatsRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/notification-settings': typeof AuthenticatedNotificationSettingsRoute
@@ -328,6 +346,8 @@ export interface FileRoutesById {
   '/rent_/$id': typeof RentIdRoute
   '/seller/$slug': typeof SellerSlugRoute
   '/rent/': typeof RentIndexRoute
+  '/_authenticated/admin/feedback': typeof AuthenticatedAdminFeedbackRoute
+  '/_authenticated/admin/reports': typeof AuthenticatedAdminReportsRoute
   '/_authenticated/chats_/$id': typeof AuthenticatedChatsIdRoute
 }
 export interface FileRouteTypes {
@@ -365,6 +385,8 @@ export interface FileRouteTypes {
     | '/rent/$id'
     | '/seller/$slug'
     | '/rent/'
+    | '/admin/feedback'
+    | '/admin/reports'
     | '/chats/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -400,6 +422,8 @@ export interface FileRouteTypes {
     | '/rent/$id'
     | '/seller/$slug'
     | '/rent'
+    | '/admin/feedback'
+    | '/admin/reports'
     | '/chats/$id'
   id:
     | '__root__'
@@ -436,6 +460,8 @@ export interface FileRouteTypes {
     | '/rent_/$id'
     | '/seller/$slug'
     | '/rent/'
+    | '/_authenticated/admin/feedback'
+    | '/_authenticated/admin/reports'
     | '/_authenticated/chats_/$id'
   fileRoutesById: FileRoutesById
 }
@@ -699,11 +725,38 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedChatsIdRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/admin/reports': {
+      id: '/_authenticated/admin/reports'
+      path: '/reports'
+      fullPath: '/admin/reports'
+      preLoaderRoute: typeof AuthenticatedAdminReportsRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
+    '/_authenticated/admin/feedback': {
+      id: '/_authenticated/admin/feedback'
+      path: '/feedback'
+      fullPath: '/admin/feedback'
+      preLoaderRoute: typeof AuthenticatedAdminFeedbackRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
   }
 }
 
+interface AuthenticatedAdminRouteChildren {
+  AuthenticatedAdminFeedbackRoute: typeof AuthenticatedAdminFeedbackRoute
+  AuthenticatedAdminReportsRoute: typeof AuthenticatedAdminReportsRoute
+}
+
+const AuthenticatedAdminRouteChildren: AuthenticatedAdminRouteChildren = {
+  AuthenticatedAdminFeedbackRoute: AuthenticatedAdminFeedbackRoute,
+  AuthenticatedAdminReportsRoute: AuthenticatedAdminReportsRoute,
+}
+
+const AuthenticatedAdminRouteWithChildren =
+  AuthenticatedAdminRoute._addFileChildren(AuthenticatedAdminRouteChildren)
+
 interface AuthenticatedRouteChildren {
-  AuthenticatedAdminRoute: typeof AuthenticatedAdminRoute
+  AuthenticatedAdminRoute: typeof AuthenticatedAdminRouteWithChildren
   AuthenticatedChatsRoute: typeof AuthenticatedChatsRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedNotificationSettingsRoute: typeof AuthenticatedNotificationSettingsRoute
@@ -723,7 +776,7 @@ interface AuthenticatedRouteChildren {
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
-  AuthenticatedAdminRoute: AuthenticatedAdminRoute,
+  AuthenticatedAdminRoute: AuthenticatedAdminRouteWithChildren,
   AuthenticatedChatsRoute: AuthenticatedChatsRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedNotificationSettingsRoute:

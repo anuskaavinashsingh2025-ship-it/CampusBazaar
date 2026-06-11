@@ -76,6 +76,7 @@ export function useSimilarListings(
         .from(table)
         .select(selectFields)
         .eq("category", category)
+        .eq("status", "available")
         .neq("id", currentId)
         .limit(4);
       if (error) throw error;

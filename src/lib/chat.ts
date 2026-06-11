@@ -807,6 +807,7 @@ export function useArchiveConversation(userId: string | null | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (conversationId: string) => {
+      console.debug("[useArchiveConversation] Archiving conversation", { conversationId });
       const { error } = await supabase
         .from(CONVERSATIONS_TABLE)
         .update({ status: "archived", archived_at: new Date().toISOString() })
@@ -1123,6 +1124,27 @@ export async function confirmConversationCompletion(input: {
     })
     .eq("id", input.conversationId);
   if (error) throw error;
+
+  // Mark the associated request as fulfilled when conversation completes
+  const { data: conversation } = await supabase
+    .from(CONVERSATIONS_TABLE)
+    .select("context_type, context_id, request_id")
+    .eq("id", input.conversationId)
+    .single();
+
+  if (conversation) {
+    if (conversation.context_type === "food" && conversation.request_id) {
+      await supabase
+        .from("food_requests")
+        .update({ status: "fulfilled" })
+        .eq("id", conversation.request_id);
+    } else if (conversation.context_type === "notes" && conversation.request_id) {
+      await supabase
+        .from("notes_requests")
+        .update({ status: "fulfilled" })
+        .eq("id", conversation.request_id);
+    }
+  }
 }
 
 export async function withdrawCompletionRequest(input: {
@@ -1158,7 +1180,12 @@ export async function completeConversationForRequest(input: {
   contextType: ChatContextType;
   contextId: string;
 }) {
-  const { error } = await supabase
+  console.debug("[completeConversationForRequest] Archiving conversation", {
+    buyerId: input.buyerId,
+    contextType: input.contextType,
+    contextId: input.contextId,
+  });
+  const { data, error } = await supabase
     .from(CONVERSATIONS_TABLE)
     .update({
       status: "completed",
@@ -1168,8 +1195,26 @@ export async function completeConversationForRequest(input: {
     })
     .eq("buyer_id", input.buyerId)
     .eq("context_type", input.contextType)
-    .eq("context_id", input.contextId);
+    .eq("context_id", input.contextId)
+    .select("id,status,archived_at,request_id")
+    .single();
+  console.debug("[completeConversationForRequest] Archive result", { data, error });
   if (error) throw error;
+
+  // Mark the associated request as fulfilled when conversation completes
+  if (data && data.request_id) {
+    if (input.contextType === "food") {
+      await supabase
+        .from("food_requests")
+        .update({ status: "fulfilled" })
+        .eq("id", data.request_id);
+    } else if (input.contextType === "notes") {
+      await supabase
+        .from("notes_requests")
+        .update({ status: "fulfilled" })
+        .eq("id", data.request_id);
+    }
+  }
 }
 
 export async function fetchRentalRequestStatus(conversation: ConversationRow): Promise<string | null> {

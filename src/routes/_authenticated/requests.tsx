@@ -74,11 +74,24 @@ const STATUS_STYLES: Record<string, string> = {
   accepted: "bg-emerald-100 text-emerald-800",
   active_rental: "bg-green-100 text-green-800",
   return_requested: "bg-orange-100 text-orange-800",
+  completion_pending: "bg-amber-100 text-amber-800",
   rejected: "bg-red-100 text-red-800",
   returned: "bg-blue-100 text-blue-800",
   completed: "bg-slate-100 text-slate-700",
   cancelled: "bg-slate-100 text-slate-500",
 };
+
+const ACTIONABLE_STATUSES = new Set([
+  "pending",
+  "accepted",
+  "active_rental",
+  "return_requested",
+  "completion_pending",
+]);
+
+function isActionableStatus(status: string) {
+  return ACTIONABLE_STATUSES.has(status.toLowerCase());
+}
 
 function RoleToggle({
   view,
@@ -201,11 +214,21 @@ function AllRequestsTab({
     (role === "seller" ? lsnp : lbnp) ||
     (role === "seller" ? lsnr : lbnr);
 
-  const productRequests = role === "seller" ? sellerProductReqs : buyerProductReqs;
-  const rentalRequests = role === "seller" ? sellerRentalReqs : buyerRentalReqs;
-  const foodOrders = role === "seller" ? sellerFoodOrders : buyerFoodOrders;
-  const notesPurchases = role === "seller" ? sellerPurchaseReqs : buyerPurchaseReqs;
-  const notesRentals = role === "seller" ? sellerNotesRentals : buyerNotesRentals;
+  const productRequests = (role === "seller" ? sellerProductReqs : buyerProductReqs).filter(
+    (req) => isActionableStatus(req.status),
+  );
+  const rentalRequests = (role === "seller" ? sellerRentalReqs : buyerRentalReqs).filter(
+    (req) => isActionableStatus(req.status),
+  );
+  const foodOrders = (role === "seller" ? sellerFoodOrders : buyerFoodOrders).filter(
+    (order) => isActionableStatus(order.status),
+  );
+  const notesPurchases = (role === "seller" ? sellerPurchaseReqs : buyerPurchaseReqs).filter(
+    (req) => isActionableStatus(req.status),
+  );
+  const notesRentals = (role === "seller" ? sellerNotesRentals : buyerNotesRentals).filter(
+    (req) => isActionableStatus(req.status),
+  );
 
   const totalCount =
     productRequests.length +
@@ -349,7 +372,9 @@ function ProductRequestsTab({
   );
   const update = useUpdateProductRequest();
   const openChat = useOpenChatOnAccept();
-  const requests = role === "seller" ? sellerReqs : buyerReqs;
+  const requests = (role === "seller" ? sellerReqs : buyerReqs).filter((req) =>
+    isActionableStatus(req.status),
+  );
   const isLoading = role === "seller" ? ls : lb;
 
   const handleAccept = (req: ProductRequestDetails) => {
@@ -488,7 +513,9 @@ function RentalRequestsTab({
   );
   const update = useUpdateRentalRequest();
   const openChat = useOpenChatOnAccept();
-  const requests = role === "seller" ? sellerReqs : buyerReqs;
+  const requests = (role === "seller" ? sellerReqs : buyerReqs).filter((req) =>
+    isActionableStatus(req.status),
+  );
   const isLoading = role === "seller" ? ls : lb;
   const [completionModalOpen, setCompletionModalOpen] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<RentalRequestDetails | null>(null);
@@ -887,7 +914,9 @@ function FoodOrdersTab({ userId, role }: { userId: string | undefined; role: "se
   );
   const update = useUpdateFoodOrder();
   const openChat = useOpenChatOnAccept();
-  const orders = role === "seller" ? sellerOrders : buyerOrders;
+  const orders = (role === "seller" ? sellerOrders : buyerOrders).filter((order) =>
+    isActionableStatus(order.status),
+  );
   const isLoading = role === "seller" ? ls : lb;
 
   const act = (
@@ -1024,8 +1053,12 @@ function NotesRequestsTab({
   const updateRental = useUpdateNotesRental();
   const openChat = useOpenChatOnAccept();
   
-  const purchaseRequests = role === "seller" ? sellerPurchaseReqs : buyerPurchaseReqs;
-  const rentalRequests = role === "seller" ? sellerRentalReqs : buyerRentalReqs;
+  const purchaseRequests = (role === "seller" ? sellerPurchaseReqs : buyerPurchaseReqs).filter(
+    (req) => isActionableStatus(req.status),
+  );
+  const rentalRequests = (role === "seller" ? sellerRentalReqs : buyerRentalReqs).filter(
+    (req) => isActionableStatus(req.status),
+  );
   const isLoading = role === "seller" ? (ls || lsr) : (lb || lbr);
   const [notesCompletionModalOpen, setNotesCompletionModalOpen] = useState(false);
   const [selectedNotesRequest, setSelectedNotesRequest] = useState<NotesRentalRow | null>(null);

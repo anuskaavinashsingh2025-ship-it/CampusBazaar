@@ -93,6 +93,13 @@ export function ReportListingDialog({
 }: ReportListingDialogProps) {
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
+  const isSelfReport = Boolean(
+    user &&
+      (itemType === "seller"
+        ? user.id === itemId
+        : user.id === sellerUserId)
+  );
+  const isReportDisabled = disabled || isSelfReport;
   const [reason, setReason] = useState<string>(REASONS[0].value);
   const [details, setDetails] = useState("");
   const [evidenceFiles, setEvidenceFiles] = useState<File[]>([]);
@@ -206,7 +213,13 @@ export function ReportListingDialog({
   };
 
   const handleTriggerClick = (e: React.MouseEvent) => {
-    // Always allow the dialog to attempt to open. Auth check is inside submit.
+    if (isReportDisabled) {
+      e.preventDefault();
+      e.stopPropagation();
+      toast.error("You can't report your own listing or storefront.");
+      return;
+    }
+
     e.preventDefault();
     e.stopPropagation();
     setOpen(true);
@@ -222,6 +235,11 @@ export function ReportListingDialog({
       // Open login page
       setOpen(false);
       window.location.assign("/login");
+      return;
+    }
+
+    if (isReportDisabled) {
+      toast.error("You can't report your own listing or storefront.");
       return;
     }
 
@@ -268,7 +286,7 @@ export function ReportListingDialog({
         <Button
           type="button"
           variant="ghost"
-          disabled={disabled}
+          disabled={isReportDisabled}
           onClick={handleTriggerClick}
           className={triggerClassName ?? "gap-2 text-muted-foreground"}
           aria-label={`Report ${CATEGORY_LABEL[itemType]}`}

@@ -312,5 +312,5 @@ export function useUpdateFoodOrder() {
 }
 
 export function isChatUnlockedForFoodOrder(status: FoodOrderStatus | undefined) {
-  return status === "accepted" || status === "completed";
+  return status === "pending" || status === "accepted" || status === "completed";
 }

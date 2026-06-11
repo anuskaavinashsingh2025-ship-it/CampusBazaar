@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate, Outlet, useRouterState } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -90,12 +90,12 @@ type ProfileLite = {
 
 function AdminPortalPage() {
   const navigate = useNavigate();
+  const routerState = useRouterState();
   const { isAdmin, user, loading } = useAuth();
+  
+  // Check if we're on the base /admin route (not a child route like /admin/reports)
+  const isDashboardView = routerState.location.pathname === "/admin";
   const queryClient = useQueryClient();
-  const [feedbackSearch, setFeedbackSearch] = useState("");
-  const [feedbackStatusFilter, setFeedbackStatusFilter] = useState<string>("all");
-  const [feedbackCategoryFilter, setFeedbackCategoryFilter] = useState<string>("all");
-  const [feedbackRatingFilter, setFeedbackRatingFilter] = useState<string>("all");
   const [adminNotes, setAdminNotes] = useState("");
   const [selectedFeedbackId, setSelectedFeedbackId] = useState<string | null>(null);
   const [signedScreenshotUrls, setSignedScreenshotUrls] = useState<Record<string, string>>({});
@@ -314,27 +314,29 @@ function AdminPortalPage() {
     [reportsRaw],
   );
 
-  const filteredFeedback = useMemo(() => {
-    if (!allFeedback) return [];
-    return allFeedback.filter((feedback) => {
-      const matchesSearch =
-        feedback.message.toLowerCase().includes(feedbackSearch.toLowerCase()) ||
-        feedback.category.toLowerCase().includes(feedbackSearch.toLowerCase());
-      const matchesStatus =
-        feedbackStatusFilter === "all" || feedback.status === feedbackStatusFilter;
-      const matchesCategory =
-        feedbackCategoryFilter === "all" || feedback.category === feedbackCategoryFilter;
-      const matchesRating =
-        feedbackRatingFilter === "all" || feedback.rating === parseInt(feedbackRatingFilter);
-      return matchesSearch && matchesStatus && matchesCategory && matchesRating;
-    });
-  }, [
-    allFeedback,
-    feedbackSearch,
-    feedbackStatusFilter,
-    feedbackCategoryFilter,
-    feedbackRatingFilter,
-  ]);
+  const latestReports = useMemo(
+    () =>
+      [...pending]
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+        .slice(0, 5),
+    [pending],
+  );
+
+  const latestFeedbackPreview = useMemo(
+    () =>
+      [...(allFeedback ?? [])]
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+        .slice(0, 5),
+    [allFeedback],
+  );
+
+  const handleOpenAllReports = () => {
+    navigate({ to: "/admin/reports" });
+  };
+
+  const handleOpenAllFeedback = () => {
+    navigate({ to: "/admin/feedback" });
+  };
 
   const handleStatusUpdate = (feedbackId: string, status: FeedbackStatus) => {
     updateFeedbackStatus.mutate({
@@ -609,576 +611,524 @@ function AdminPortalPage() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 py-2">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Admin Portal</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Trust, safety and moderation controls.</p>
-      </div>
+      {isDashboardView ? (
+        <div>
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">Admin Portal</h1>
+            <p className="mt-1 text-sm text-muted-foreground">Trust, safety and moderation controls.</p>
+          </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        <StatCard label="Total users" value={analytics?.totalUsers ?? 0} />
-        <StatCard label="Total products" value={analytics?.totalProducts ?? 0} />
-        <StatCard label="Pending reports" value={analytics?.pendingReports ?? 0} />
-        <StatCard label="Banned users" value={analytics?.bannedUsers ?? 0} />
-        <StatCard label="Suspicious flags" value={analytics?.suspicious ?? 0} />
-      </div>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+            <StatCard label="Total users" value={analytics?.totalUsers ?? 0} />
+            <StatCard label="Total products" value={analytics?.totalProducts ?? 0} />
+            <StatCard label="Pending reports" value={analytics?.pendingReports ?? 0} />
+            <StatCard label="Banned users" value={analytics?.bannedUsers ?? 0} />
+            <StatCard label="Suspicious flags" value={analytics?.suspicious ?? 0} />
+          </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Report Queue ({pending.length})</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {pending.length === 0 ? (
-            <div className="py-8 text-center text-sm text-muted-foreground">
-              No pending reports.
-            </div>
-          ) : (
-            pending.map((r) => {
-              // Log each report to see if seller_user_id is populated
-              if (!r.seller_user_id && r.target_type !== "seller") {
-                console.log("[ADMIN] Report rendered without seller_user_id", {
-                  reportId: r.id,
-                  targetType: r.target_type,
-                  seller_user_id: r.seller_user_id,
-                  seller_user_idType: typeof r.seller_user_id,
-                  reason: r.reason,
-                });
-              }
-              
-              const isExpanded = expandedReports.has(r.id);
-              const target = targetFor(r);
-              const targetUrl = target?.url ?? null;
-              const reporterHasProfile = Boolean(reporterProfiles?.[r.reporter_id]);
-              const sellerHasProfile = Boolean(
-                r.seller_user_id && sellerProfiles?.[r.seller_user_id],
-              );
-              return (
-                <div key={r.id} className="rounded-xl border p-3">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge variant="secondary">{r.target_type}</Badge>
-                    <Badge variant="outline">{r.reason}</Badge>
-                    <span className="text-xs text-muted-foreground">
-                      {new Date(r.created_at).toLocaleString()}
-                    </span>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => toggleExpanded(r.id)}
-                      className="ml-auto gap-1"
-                    >
-                      {isExpanded ? (
-                        <>
-                          <ChevronUp className="h-4 w-4" /> Hide details
-                        </>
-                      ) : (
-                        <>
-                          <ChevronDown className="h-4 w-4" /> Show details
-                        </>
-                      )}
-                    </Button>
-                  </div>
-
-                  {r.details && (
-                    <div className="mt-2 text-sm text-muted-foreground">
-                      <span className="font-semibold">Description: </span>
-                      {r.details}
-                    </div>
-                  )}
-
-                  {r.evidence_urls && r.evidence_urls.length > 0 && (
-                    <div className="mt-3">
-                      <div className="mb-2 text-xs font-medium text-muted-foreground">
-                        Evidence ({r.evidence_count ?? r.evidence_urls.length} images)
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {r.evidence_urls.map((url, index) => (
-                          <img
-                            key={`${r.id}-${index}`}
-                            src={url}
-                            alt={`Evidence ${index + 1}`}
-                            className="h-16 w-16 cursor-pointer rounded-md object-cover hover:opacity-80"
-                            onClick={() => {
-                              setPreviewImages(r.evidence_urls!);
-                              setPreviewIndex(index);
-                              setPreviewOpen(true);
-                            }}
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).style.display = "none";
-                            }}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {isExpanded && (
-                    <div className="mt-3 space-y-3 rounded-lg border bg-muted/30 p-3 text-sm">
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        <div className="rounded-md border bg-background p-3">
-                          <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                            Reporter
-                          </div>
-                          <div className="font-medium">{reporterName(r)}</div>
-                          {reporterEmail(r) && (
-                            <div className="text-xs text-muted-foreground">{reporterEmail(r)}</div>
+          <Card>
+            <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <CardTitle>Report Queue</CardTitle>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Showing the latest {latestReports.length} of {pending.length} pending reports.
+                </p>
+              </div>
+              <Button variant="outline" onClick={handleOpenAllReports}>
+                View All Reports
+              </Button>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {latestReports.length === 0 ? (
+                <div className="py-8 text-center text-sm text-muted-foreground">
+                  No pending reports.
+                </div>
+              ) : (
+                latestReports.map((r) => {
+                  const isExpanded = expandedReports.has(r.id);
+                  const target = targetFor(r);
+                  const targetUrl = target?.url ?? null;
+                  const reporterHasProfile = Boolean(reporterProfiles?.[r.reporter_id]);
+                  const sellerHasProfile = Boolean(
+                    r.seller_user_id && sellerProfiles?.[r.seller_user_id],
+                  );
+                  return (
+                    <div key={r.id} className="rounded-xl border p-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="secondary">{r.target_type}</Badge>
+                        <Badge variant="outline">{r.reason}</Badge>
+                        <span className="text-xs text-muted-foreground">
+                          {new Date(r.created_at).toLocaleString()}
+                        </span>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => toggleExpanded(r.id)}
+                          className="ml-auto gap-1"
+                        >
+                          {isExpanded ? (
+                            <>
+                              <ChevronUp className="h-4 w-4" /> Hide details
+                            </>
+                          ) : (
+                            <>
+                              <ChevronDown className="h-4 w-4" /> Show details
+                            </>
                           )}
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="mt-2 gap-1"
-                            onClick={() => void handleViewReporter(r.reporter_id)}
-                          >
-                            <UserIcon className="h-3.5 w-3.5" /> View reporter
-                          </Button>
-                          {!reporterHasProfile && (
-                            <div className="mt-2 text-[10px] text-muted-foreground">
-                              (profile not yet loaded)
-                            </div>
-                          )}
+                        </Button>
+                      </div>
+
+                      {r.details && (
+                        <div className="mt-2 text-sm text-muted-foreground">
+                          <span className="font-semibold">Description: </span>
+                          {r.details}
                         </div>
-                        {r.seller_user_id ? (
-                          <div className="rounded-md border bg-background p-3">
-                            <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                              Seller
+                      )}
+
+                      {r.evidence_urls && r.evidence_urls.length > 0 && (
+                        <div className="mt-3">
+                          <div className="mb-2 text-xs font-medium text-muted-foreground">
+                            Evidence ({r.evidence_count ?? r.evidence_urls.length} images)
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {r.evidence_urls.map((url, index) => (
+                              <img
+                                key={`${r.id}-${index}`}
+                                src={url}
+                                alt={`Evidence ${index + 1}`}
+                                className="h-16 w-16 cursor-pointer rounded-md object-cover hover:opacity-80"
+                                onClick={() => {
+                                  setPreviewImages(r.evidence_urls!);
+                                  setPreviewIndex(index);
+                                  setPreviewOpen(true);
+                                }}
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).style.display = "none";
+                                }}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {isExpanded && (
+                        <div className="mt-3 space-y-3 rounded-lg border bg-muted/30 p-3 text-sm">
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            <div className="rounded-md border bg-background p-3">
+                              <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                Reporter
+                              </div>
+                              <div className="font-medium">{reporterName(r)}</div>
+                              {reporterEmail(r) && (
+                                <div className="text-xs text-muted-foreground">{reporterEmail(r)}</div>
+                              )}
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="mt-2 gap-1"
+                                onClick={() => void handleViewReporter(r.reporter_id)}
+                              >
+                                <UserIcon className="h-3.5 w-3.5" /> View reporter
+                              </Button>
+                              {!reporterHasProfile && (
+                                <div className="mt-2 text-[10px] text-muted-foreground">
+                                  (profile not yet loaded)
+                                </div>
+                              )}
                             </div>
-                            <div className="font-medium">{sellerName(r) ?? "Unknown seller"}</div>
-                            {sellerEmail(r) && (
-                              <div className="text-xs text-muted-foreground">{sellerEmail(r)}</div>
-                            )}
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="mt-2 gap-1"
-                              onClick={() => void handleViewSeller(r.seller_user_id!)}
-                            >
-                              <ShieldAlert className="h-3.5 w-3.5" /> View seller
-                            </Button>
-                            {!sellerHasProfile && (
-                              <div className="mt-2 text-[10px] text-muted-foreground">
-                                (profile not yet loaded)
+                            {r.seller_user_id ? (
+                              <div className="rounded-md border bg-background p-3">
+                                <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                  Seller
+                                </div>
+                                <div className="font-medium">{sellerName(r) ?? "Unknown seller"}</div>
+                                {sellerEmail(r) && (
+                                  <div className="text-xs text-muted-foreground">{sellerEmail(r)}</div>
+                                )}
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="mt-2 gap-1"
+                                  onClick={() => void handleViewSeller(r.seller_user_id!)}
+                                >
+                                  <ShieldAlert className="h-3.5 w-3.5" /> View seller
+                                </Button>
+                                {!sellerHasProfile && (
+                                  <div className="mt-2 text-[10px] text-muted-foreground">
+                                    (profile not yet loaded)
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="rounded-md border bg-background p-3 text-xs text-muted-foreground">
+                                No seller associated with this report.
                               </div>
                             )}
                           </div>
-                        ) : (
-                          <div className="rounded-md border bg-background p-3 text-xs text-muted-foreground">
-                            No seller associated with this report.
-                          </div>
-                        )}
-                      </div>
 
-                      <div className="rounded-md border bg-background p-3">
-                        <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                          Report metadata
-                        </div>
-                        <div className="grid gap-2 text-xs sm:grid-cols-2">
-                          <div><span className="text-muted-foreground">Type:</span> {r.target_type}</div>
-                          <div><span className="text-muted-foreground">Reason:</span> {r.reason}</div>
-                          <div><span className="text-muted-foreground">Status:</span> {r.status}</div>
-                          <div>
-                            <span className="text-muted-foreground">Submitted:</span>{" "}
-                            {new Date(r.created_at).toLocaleString()}
+                          <div className="rounded-md border bg-background p-3">
+                            <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                              Report metadata
+                            </div>
+                            <div className="grid gap-2 text-xs sm:grid-cols-2">
+                              <div><span className="text-muted-foreground">Type:</span> {r.target_type}</div>
+                              <div><span className="text-muted-foreground">Reason:</span> {r.reason}</div>
+                              <div><span className="text-muted-foreground">Status:</span> {r.status}</div>
+                              <div>
+                                <span className="text-muted-foreground">Submitted:</span>{" "}
+                                {new Date(r.created_at).toLocaleString()}
+                              </div>
+                              <div className="sm:col-span-2">
+                                <span className="text-muted-foreground">Full description:</span>{" "}
+                                <span className="whitespace-pre-wrap">{r.details || "(none)"}</span>
+                              </div>
+                            </div>
                           </div>
-                          <div className="sm:col-span-2">
-                            <span className="text-muted-foreground">Full description:</span>{" "}
-                            <span className="whitespace-pre-wrap">{r.details || "(none)"}</span>
-                          </div>
-                        </div>
-                      </div>
 
-                      {targetUrl && (
-                        <div className="flex flex-wrap gap-2">
-                          <Button asChild size="sm" variant="secondary" className="gap-1">
+                          {targetUrl && (
+                            <div className="flex flex-wrap gap-2">
+                              <Button asChild size="sm" variant="secondary" className="gap-1">
+                                <Link to={targetUrl as never}>
+                                  <ExternalLink className="h-3.5 w-3.5" /> {targetLabelFor(r)}
+                                </Link>
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <Button size="sm" onClick={() => updateReportStatus(r.id, "resolved")}>
+                          Resolve
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => updateReportStatus(r.id, "dismissed")}
+                        >
+                          Dismiss
+                        </Button>
+                        {targetUrl && !isExpanded && (
+                          <Button asChild size="sm" variant="ghost" className="gap-1">
                             <Link to={targetUrl as never}>
                               <ExternalLink className="h-3.5 w-3.5" /> {targetLabelFor(r)}
                             </Link>
                           </Button>
-                        </div>
-                      )}
-                    </div>
-                  )}
+                        )}
 
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <Button size="sm" onClick={() => updateReportStatus(r.id, "resolved")}>
-                      Resolve
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => updateReportStatus(r.id, "dismissed")}
-                    >
-                      Dismiss
-                    </Button>
-                    {targetUrl && !isExpanded && (
-                      <Button asChild size="sm" variant="ghost" className="gap-1">
-                        <Link to={targetUrl as never}>
-                          <ExternalLink className="h-3.5 w-3.5" /> {targetLabelFor(r)}
-                        </Link>
-                      </Button>
-                    )}
-
-                    {r.target_type === "product" && r.product_id && (
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        onClick={() => removeProduct(r.product_id!)}
-                      >
-                        Remove Product
-                      </Button>
-                    )}
-
-                    {r.seller_user_id && (
-                      <>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() =>
-                            setUserStatus(r.seller_user_id!, "suspended", "suspend_user")
-                          }
-                        >
-                          Suspend User
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => {
-                            console.log("[ADMIN] Ban Seller clicked", {
-                              reportId: r.id,
-                              reportTargetType: r.target_type,
-                              reporterUserId: r.reporter_id,
-                              reportSellerUserId: r.seller_user_id,
-                              reportSellerUserIdType: typeof r.seller_user_id,
-                              reportSellerUserIdIsNull: r.seller_user_id === null,
-                              reportSellerUserIdIsUndefined: r.seller_user_id === undefined,
-                              reportSellerUserIdLength: r.seller_user_id?.length,
-                            });
-                            setBanTargetUserId(r.seller_user_id!);
-                            setBanTargetUserName(sellerName(r) ?? "reported seller");
-                            setBanCurrentReport(r);
-                            setBanModalOpen(true);
-                          }}
-                        >
-                          Ban Seller
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                </div>
-              );
-            })
-          )}
-        </CardContent>
-      </Card>
-
-      <Dialog
-        open={reporterModal.open}
-        onOpenChange={(o) => setReporterModal((s) => ({ ...s, open: o }))}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Reporter details</DialogTitle>
-            <DialogDescription>
-              Account information for the user who filed this report.
-            </DialogDescription>
-          </DialogHeader>
-          {reporterModal.profile ? (
-            <div className="space-y-3 text-sm">
-              <div>
-                <div className="text-xs text-muted-foreground">Name</div>
-                <div className="font-medium">{reporterModal.profile.full_name || "—"}</div>
-              </div>
-              <div>
-                <div className="text-xs text-muted-foreground">Email</div>
-                <div className="font-medium">{reporterModal.profile.email || "—"}</div>
-              </div>
-              <div>
-                <div className="text-xs text-muted-foreground">Role</div>
-                <div className="font-medium">
-                  <Badge variant="outline">{reporterModal.profile.role || "user"}</Badge>
-                </div>
-              </div>
-              <div>
-                <div className="text-xs text-muted-foreground">Status</div>
-                <div className="font-medium">
-                  <Badge variant="outline">{reporterModal.profile.status || "active"}</Badge>
-                </div>
-              </div>
-              <div>
-                <div className="text-xs text-muted-foreground">Join date</div>
-                <div className="font-medium">
-                  {reporterModal.profile.created_at
-                    ? new Date(reporterModal.profile.created_at).toLocaleDateString()
-                    : "—"}
-                </div>
-              </div>
-              <div>
-                <div className="text-xs text-muted-foreground">Reports submitted</div>
-                <div className="font-medium">{reporterModal.reportsSubmitted}</div>
-              </div>
-            </div>
-          ) : (
-            <div className="text-sm text-muted-foreground">
-              Reporter profile not available (the user may have been deleted).
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      <Dialog
-        open={sellerModal.open}
-        onOpenChange={(o) => setSellerModal((s) => ({ ...s, open: o }))}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Seller details</DialogTitle>
-            <DialogDescription>
-              Account information for the seller associated with this report.
-            </DialogDescription>
-          </DialogHeader>
-          {sellerModal.profile ? (
-            <div className="space-y-3 text-sm">
-              <div>
-                <div className="text-xs text-muted-foreground">Name</div>
-                <div className="font-medium">{sellerModal.profile.full_name || "—"}</div>
-              </div>
-              <div>
-                <div className="text-xs text-muted-foreground">Email</div>
-                <div className="font-medium">{sellerModal.profile.email || "—"}</div>
-              </div>
-              <div>
-                <div className="text-xs text-muted-foreground">Status</div>
-                <div className="font-medium">
-                  <Badge variant="outline">{sellerModal.profile.status || "active"}</Badge>
-                </div>
-              </div>
-              <div>
-                <div className="text-xs text-muted-foreground">Total listings</div>
-                <div className="font-medium">{sellerModal.totalListings}</div>
-              </div>
-              <div>
-                <div className="text-xs text-muted-foreground">Reports received</div>
-                <div className="font-medium">{sellerModal.totalReportsReceived}</div>
-              </div>
-              <div>
-                <div className="text-xs text-muted-foreground">Ban history</div>
-                {sellerModal.profile.banned_at ? (
-                  <div className="rounded-md border border-destructive/30 bg-destructive/5 p-2 text-xs">
-                    <div>
-                      <span className="font-semibold">Banned at:</span>{" "}
-                      {new Date(sellerModal.profile.banned_at).toLocaleString()}
-                    </div>
-                    {sellerModal.profile.banned_until && (
-                      <div>
-                        <span className="font-semibold">Banned until:</span>{" "}
-                        {new Date(sellerModal.profile.banned_until).toLocaleString()}
-                      </div>
-                    )}
-                    {sellerModal.profile.ban_reason && (
-                      <div>
-                        <span className="font-semibold">Reason:</span>{" "}
-                        {sellerModal.profile.ban_reason}
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="text-xs text-muted-foreground">No ban on record.</div>
-                )}
-              </div>
-            </div>
-          ) : (
-            <div className="text-sm text-muted-foreground">
-              Seller profile not available (the user may have been deleted).
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <MessageCircle className="h-5 w-5" />
-            Feedback Management
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex flex-wrap gap-3">
-            <div className="flex-1 min-w-[200px]">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  placeholder="Search feedback..."
-                  value={feedbackSearch}
-                  onChange={(e) => setFeedbackSearch(e.target.value)}
-                  className="pl-9"
-                />
-              </div>
-            </div>
-            <Select value={feedbackStatusFilter} onValueChange={setFeedbackStatusFilter}>
-              <SelectTrigger className="w-[150px]">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="submitted">Submitted</SelectItem>
-                <SelectItem value="under_review">Under Review</SelectItem>
-                <SelectItem value="resolved">Resolved</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={feedbackCategoryFilter} onValueChange={setFeedbackCategoryFilter}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Category" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Categories</SelectItem>
-                {FEEDBACK_CATEGORIES.map((cat) => (
-                  <SelectItem key={cat} value={cat}>
-                    {cat}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={feedbackRatingFilter} onValueChange={setFeedbackRatingFilter}>
-              <SelectTrigger className="w-[120px]">
-                <SelectValue placeholder="Rating" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Ratings</SelectItem>
-                <SelectItem value="5">5 Stars</SelectItem>
-                <SelectItem value="4">4 Stars</SelectItem>
-                <SelectItem value="3">3 Stars</SelectItem>
-                <SelectItem value="2">2 Stars</SelectItem>
-                <SelectItem value="1">1 Star</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {filteredFeedback.length === 0 ? (
-            <div className="py-8 text-center text-sm text-muted-foreground">No feedback found.</div>
-          ) : (
-            <div className="space-y-3">
-              {filteredFeedback.map((feedback: any) => (
-                <div key={feedback.id} className="rounded-xl border p-4">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex flex-wrap items-center gap-2 mb-2">
-                        <div className="flex">
-                          {[1, 2, 3, 4, 5].map((star) => (
-                            <Star
-                              key={star}
-                              className={`h-4 w-4 ${
-                                star <= feedback.rating
-                                  ? "fill-orange-500 text-orange-500"
-                                  : "text-gray-300"
-                              }`}
-                            />
-                          ))}
-                        </div>
-                        <Badge variant="outline">{feedback.category}</Badge>
-                        {getStatusBadge(feedback.status)}
-                        <span className="text-xs text-muted-foreground">
-                          {new Date(feedback.created_at).toLocaleString()}
-                        </span>
-                      </div>
-
-                      <div className="mb-2">
-                        <span className="text-sm font-medium">User ID: {feedback.user_id}</span>
-                      </div>
-
-                      <p className="text-sm text-gray-700">{feedback.message}</p>
-
-                      {feedback.screenshot_url && (
-                        <img
-                          src={signedScreenshotUrls[feedback.id] || feedback.screenshot_url}
-                          alt="Screenshot"
-                          className="mt-2 h-24 w-24 rounded border border-gray-300 object-cover"
-                        />
-                      )}
-
-                      {feedback.admin_notes && (
-                        <div className="mt-2 rounded bg-blue-50 p-2 text-sm text-blue-700">
-                          <span className="font-semibold">Admin Note:</span> {feedback.admin_notes}
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="flex flex-col gap-2">
-                      <Dialog>
-                        <DialogTrigger asChild>
+                        {r.target_type === "product" && r.product_id && (
                           <Button
                             size="sm"
-                            variant="outline"
-                            onClick={() => setSelectedFeedbackId(feedback.id)}
+                            variant="destructive"
+                            onClick={() => removeProduct(r.product_id!)}
                           >
-                            Add Notes
+                            Remove Product
                           </Button>
-                        </DialogTrigger>
-                        <DialogContent>
-                          <DialogHeader>
-                            <DialogTitle>Add Admin Notes</DialogTitle>
-                          </DialogHeader>
-                          <div className="space-y-4">
-                            <Textarea
-                              placeholder="Enter admin notes..."
-                              value={selectedFeedbackId === feedback.id ? adminNotes : ""}
-                              onChange={(e) => setAdminNotes(e.target.value)}
-                              className="min-h-[100px]"
-                            />
-                            <div className="flex gap-2">
-                              <Button
-                                size="sm"
-                                onClick={() => handleStatusUpdate(feedback.id, "under_review")}
-                              >
-                                Mark Under Review
-                              </Button>
-                              <Button
-                                size="sm"
-                                onClick={() => handleStatusUpdate(feedback.id, "resolved")}
-                              >
-                                Mark Resolved
-                              </Button>
-                            </div>
-                          </div>
-                        </DialogContent>
-                      </Dialog>
+                        )}
 
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        onClick={() => handleDeleteFeedback(feedback.id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                        {r.seller_user_id && (
+                          <>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() =>
+                                setUserStatus(r.seller_user_id!, "suspended", "suspend_user")
+                              }
+                            >
+                              Suspend User
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => {
+                                setBanTargetUserId(r.seller_user_id!);
+                                setBanTargetUserName(sellerName(r) ?? "reported seller");
+                                setBanCurrentReport(r);
+                                setBanModalOpen(true);
+                              }}
+                            >
+                              Ban Seller
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </CardContent>
+          </Card>
+
+          <Dialog
+            open={reporterModal.open}
+            onOpenChange={(o) => setReporterModal((s) => ({ ...s, open: o }))}
+          >
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Reporter details</DialogTitle>
+                <DialogDescription>
+                  Account information for the user who filed this report.
+                </DialogDescription>
+              </DialogHeader>
+              {reporterModal.profile ? (
+                <div className="space-y-3 text-sm">
+                  <div>
+                    <div className="text-xs text-muted-foreground">Name</div>
+                    <div className="font-medium">{reporterModal.profile.full_name || "—"}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground">Email</div>
+                    <div className="font-medium">{reporterModal.profile.email || "—"}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground">Role</div>
+                    <div className="font-medium">
+                      <Badge variant="outline">{reporterModal.profile.role || "user"}</Badge>
                     </div>
                   </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground">Status</div>
+                    <div className="font-medium">
+                      <Badge variant="outline">{reporterModal.profile.status || "active"}</Badge>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground">Join date</div>
+                    <div className="font-medium">
+                      {reporterModal.profile.created_at
+                        ? new Date(reporterModal.profile.created_at).toLocaleDateString()
+                        : "—"}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground">Reports submitted</div>
+                    <div className="font-medium">{reporterModal.reportsSubmitted}</div>
+                  </div>
                 </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+              ) : (
+                <div className="text-sm text-muted-foreground">
+                  Reporter profile not available (the user may have been deleted).
+                </div>
+              )}
+            </DialogContent>
+          </Dialog>
 
-      <ImagePreviewModal
-        images={previewImages}
-        initialIndex={previewIndex}
-        open={previewOpen}
-        onOpenChange={setPreviewOpen}
-      />
+          <Dialog
+            open={sellerModal.open}
+            onOpenChange={(o) => setSellerModal((s) => ({ ...s, open: o }))}
+          >
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Seller details</DialogTitle>
+                <DialogDescription>
+                  Account information for the seller associated with this report.
+                </DialogDescription>
+              </DialogHeader>
+              {sellerModal.profile ? (
+                <div className="space-y-3 text-sm">
+                  <div>
+                    <div className="text-xs text-muted-foreground">Name</div>
+                    <div className="font-medium">{sellerModal.profile.full_name || "—"}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground">Email</div>
+                    <div className="font-medium">{sellerModal.profile.email || "—"}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground">Status</div>
+                    <div className="font-medium">
+                      <Badge variant="outline">{sellerModal.profile.status || "active"}</Badge>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground">Total listings</div>
+                    <div className="font-medium">{sellerModal.totalListings}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground">Reports received</div>
+                    <div className="font-medium">{sellerModal.totalReportsReceived}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground">Ban history</div>
+                    {sellerModal.profile.banned_at ? (
+                      <div className="rounded-md border border-destructive/30 bg-destructive/5 p-2 text-xs">
+                        <div>
+                          <span className="font-semibold">Banned at:</span>{" "}
+                          {new Date(sellerModal.profile.banned_at).toLocaleString()}
+                        </div>
+                        {sellerModal.profile.banned_until && (
+                          <div>
+                            <span className="font-semibold">Banned until:</span>{" "}
+                            {new Date(sellerModal.profile.banned_until).toLocaleString()}
+                          </div>
+                        )}
+                        {sellerModal.profile.ban_reason && (
+                          <div>
+                            <span className="font-semibold">Reason:</span>{" "}
+                            {sellerModal.profile.ban_reason}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="text-xs text-muted-foreground">No ban on record.</div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="text-sm text-muted-foreground">
+                  Seller profile not available (the user may have been deleted).
+                </div>
+              )}
+            </DialogContent>
+          </Dialog>
 
-      <BanModal
-        open={banModalOpen}
-        onOpenChange={setBanModalOpen}
-        targetUserId={banTargetUserId ?? ""}
-        targetUserName={banTargetUserName ?? undefined}
-        reportContext={banCurrentReport ? {
-          reportId: banCurrentReport.id,
-          targetType: banCurrentReport.target_type,
-          reporterId: banCurrentReport.reporter_id,
-          sellerUserId: banCurrentReport.seller_user_id,
-        } : null}
-        onBanned={async () => {
-          // Refetch all admin queries after successful ban
-          await queryClient.invalidateQueries({ queryKey: ["admin"] });
-          setBanCurrentReport(null);
-        }}
-      />
+          <Card>
+            <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <MessageCircle className="h-5 w-5" />
+                  Feedback Management
+                </CardTitle>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Showing the latest {latestFeedbackPreview.length} feedback entries, newest first.
+                </p>
+              </div>
+              <Button variant="outline" onClick={handleOpenAllFeedback}>
+                View All Feedback
+              </Button>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {latestFeedbackPreview.length === 0 ? (
+                <div className="py-8 text-center text-sm text-muted-foreground">No feedback found.</div>
+              ) : (
+                <div className="space-y-3">
+                  {latestFeedbackPreview.map((feedback: any) => (
+                    <div key={feedback.id} className="rounded-xl border p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex flex-wrap items-center gap-2 mb-2">
+                            <div className="flex">
+                              {[1, 2, 3, 4, 5].map((star) => (
+                                <Star
+                                  key={star}
+                                  className={`h-4 w-4 ${
+                                    star <= feedback.rating
+                                      ? "fill-orange-500 text-orange-500"
+                                      : "text-gray-300"
+                                  }`}
+                                />
+                              ))}
+                            </div>
+                            <Badge variant="outline">{feedback.category}</Badge>
+                            {getStatusBadge(feedback.status)}
+                            <span className="text-xs text-muted-foreground">
+                              {new Date(feedback.created_at).toLocaleString()}
+                            </span>
+                          </div>
+
+                          <div className="mb-2">
+                            <span className="text-sm font-medium">User ID: {feedback.user_id}</span>
+                          </div>
+
+                          <p className="text-sm text-gray-700">{feedback.message}</p>
+
+                          {feedback.screenshot_url && (
+                            <img
+                              src={signedScreenshotUrls[feedback.id] || feedback.screenshot_url}
+                              alt="Screenshot"
+                              className="mt-2 h-24 w-24 rounded border border-gray-300 object-cover"
+                            />
+                          )}
+
+                          {feedback.admin_notes && (
+                            <div className="mt-2 rounded bg-blue-50 p-2 text-sm text-blue-700">
+                              <span className="font-semibold">Admin Note:</span> {feedback.admin_notes}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="flex flex-col gap-2">
+                          <Dialog>
+                            <DialogTrigger asChild>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setSelectedFeedbackId(feedback.id)}
+                              >
+                                Add Notes
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent>
+                              <DialogHeader>
+                                <DialogTitle>Add Admin Notes</DialogTitle>
+                              </DialogHeader>
+                              <div className="space-y-4">
+                                <Textarea
+                                  placeholder="Enter admin notes..."
+                                  value={selectedFeedbackId === feedback.id ? adminNotes : ""}
+                                  onChange={(e) => setAdminNotes(e.target.value)}
+                                  className="min-h-[100px]"
+                                />
+                                <div className="flex gap-2">
+                                  <Button
+                                    size="sm"
+                                    onClick={() => handleStatusUpdate(feedback.id, "under_review")}
+                                  >
+                                    Mark Under Review
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    onClick={() => handleStatusUpdate(feedback.id, "resolved")}
+                                  >
+                                    Mark Resolved
+                                  </Button>
+                                </div>
+                              </div>
+                            </DialogContent>
+                          </Dialog>
+
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => handleDeleteFeedback(feedback.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <ImagePreviewModal
+            images={previewImages}
+            initialIndex={previewIndex}
+            open={previewOpen}
+            onOpenChange={setPreviewOpen}
+          />
+
+          <BanModal
+            open={banModalOpen}
+            onOpenChange={setBanModalOpen}
+            targetUserId={banTargetUserId ?? ""}
+            targetUserName={banTargetUserName ?? undefined}
+            reportContext={banCurrentReport ? {
+              reportId: banCurrentReport.id,
+              targetType: banCurrentReport.target_type,
+              reporterId: banCurrentReport.reporter_id,
+              sellerUserId: banCurrentReport.seller_user_id,
+            } : null}
+            onBanned={async () => {
+              await queryClient.invalidateQueries({ queryKey: ["admin"] });
+              setBanCurrentReport(null);
+            }}
+          />
+        </div>
+      ) : null}
+      {!isDashboardView && <Outlet />}
     </div>
   );
 }
