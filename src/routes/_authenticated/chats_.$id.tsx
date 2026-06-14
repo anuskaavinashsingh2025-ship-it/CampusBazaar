@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Archive, Loader2, Star, Clock, CheckCircle2, RotateCcw, Undo2 } from "lucide-react";
+import { ArrowLeft, Archive, Loader2, Star, Clock, CheckCircle2, RotateCcw, Undo2, XCircle, AlertTriangle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
@@ -12,6 +12,7 @@ import {
   useConfirmConversationCompletion,
   useRequestConversationCompletion,
   useWithdrawCompletionRequest,
+  useDeclineConversationCompletion,
   useReopenArchivedChat,
   useConversation,
   useIsTyping,
@@ -24,6 +25,7 @@ import {
   useSubmitRating,
   useUpdatePresence,
 } from "@/lib/chat";
+import { getDaysUntilDeletion } from "@/lib/chat-inactivity";
 import {
   useUpdateRentalRequest,
   type RentalRequestStatus,
@@ -72,6 +74,7 @@ function ChatThreadPage() {
   const requestCompletion = useRequestConversationCompletion(user?.id);
   const confirmCompletion = useConfirmConversationCompletion(user?.id);
   const withdrawCompletion = useWithdrawCompletionRequest(user?.id);
+  const declineCompletion = useDeclineConversationCompletion(user?.id);
   const reopenChat = useReopenArchivedChat(user?.id);
   const submitRating = useSubmitRating(user?.id);
   const updateRental = useUpdateRentalRequest();
@@ -353,6 +356,19 @@ function ChatThreadPage() {
               Confirm Complete
             </Button>
           )}
+          {/* Decline completion — only visible to the other participant */}
+          {isCompletionConfirmer && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-1 text-xs text-red-600"
+              onClick={() => declineCompletion.mutate(conversation.id)}
+              disabled={declineCompletion.isPending}
+            >
+              {declineCompletion.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <XCircle className="h-3.5 w-3.5" />}
+              Decline
+            </Button>
+          )}
           {/* Reopen auto-archived chats */}
           {isAutoArchived && (
             <Button
@@ -417,9 +433,9 @@ function ChatThreadPage() {
       {/* Completed info banner */}
       {isCompleted && (
         <div className="flex items-center gap-2 border-b bg-emerald-50 px-4 py-2.5 text-sm dark:bg-emerald-950/30">
-          <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+          <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" />
           <span className="text-emerald-800 dark:text-emerald-200">
-            Transaction completed. Chat is now locked.
+            Transaction completed. Chat is now locked. Deletes in {getDaysUntilDeletion(conversation.completed_at)} days.
           </span>
         </div>
       )}

@@ -48,6 +48,8 @@ export type ConversationRow = {
   archive_reason: string | null;
   completion_requested_by: string | null;
   completion_requested_at: string | null;
+  completion_confirmed_by: string | null;
+  completion_confirmed_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -75,7 +77,7 @@ export type ConversationListItem = ConversationRow & {
   section: ChatSection;
 };
 
-export type ChatSection = "active" | "rental" | "request" | "archived" | "reported";
+export type ChatSection = "new" | "ongoing" | "completed" | "reported";
 
 export type ParticipantTrustInfo = {
   user_id: string;
@@ -116,23 +118,26 @@ export function invalidateChatQueries(queryClient: QueryClient) {
 
 export function classifyConversationSection(conv: ConversationRow, _userId: string): ChatSection {
   if (conv.is_reported || conv.status === "reported") return "reported";
-  if (conv.status === "archived" || conv.status === "completed" || conv.status === "auto_archived") return "archived";
-  if (conv.status === "active" && !conv.last_message_at) return "request";
-  if (conv.context_type === "rental" && conv.status === "active") return "rental";
-  return "active";
+  if (conv.status === "completed" || conv.status === "auto_archived") return "completed";
+  if (conv.status === "archived") return "completed";
+  if (conv.status === "completion_pending") return "ongoing"; // Completion pending conversations are ongoing
+  // New: conversation exists but no actual chat interaction has started yet
+  if (!conv.last_message_at) return "new";
+  // Ongoing: has user messages, transaction not completed, not reported
+  return "ongoing";
 }
 
 export function getDefaultChatSection(conversations: ConversationListItem[]): ChatSection {
-  const priority: ChatSection[] = ["request", "active", "rental", "archived", "reported"];
+  const priority: ChatSection[] = ["new", "ongoing", "completed", "reported"];
   for (const section of priority) {
     if (conversations.some((c) => c.section === section)) return section;
   }
-  return "active";
+  return "ongoing";
 }
 
 export function getConversationPreview(conv: ConversationListItem) {
   if (conv.last_message_preview) return conv.last_message_preview;
-  if (conv.section === "request") return "Chat unlocked — start the conversation";
+  if (conv.section === "new") return "Start the conversation";
   return "No messages yet";
 }
 
@@ -689,6 +694,48 @@ export function useSetTyping(
       );
     },
   });
+}
+
+export function useRequestCompletion(userId: string | null | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (conversationId: string) => {
+      if (!userId) throw new Error("Authentication required");
+
+      const { error } = await supabase.rpc("request_conversation_completion", {
+        p_conversation_id: conversationId,
+      });
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      invalidateChatQueries(queryClient);
+      toast.success("Completion requested");
+    },
+  });
+}
+
+export function useDeclineCompletion(userId: string | null | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (conversationId: string) => {
+      if (!userId) throw new Error("Authentication required");
+
+      const { error } = await supabase.rpc("decline_conversation_completion", {
+        p_conversation_id: conversationId,
+      });
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      invalidateChatQueries(queryClient);
+      toast.success("Completion declined");
+    },
+  });
+}
+
+export function useDeclineConversationCompletion(userId: string | null | undefined) {
+  return useDeclineCompletion(userId);
 }
 
 export function useSendMessage(userId: string | null | undefined) {

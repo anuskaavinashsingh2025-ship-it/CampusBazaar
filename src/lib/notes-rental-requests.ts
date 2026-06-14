@@ -31,6 +31,7 @@ export type NotesRentalRow = {
   status: NotesRentalStatus;
   created_at: string;
   updated_at: string;
+  conversation_id: string | null;
 };
 
 const REQUESTS_TABLE = "notes_purchase_requests" as unknown as keyof Database["public"]["Tables"];
@@ -66,7 +67,26 @@ export function useSellerNotesRentals(sellerId: string | null | undefined) {
         .eq("seller_id", sellerId!)
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return (data ?? []) as unknown as NotesRentalRow[];
+      const rentals = (data ?? []) as unknown as NotesRentalRow[];
+      if (!rentals.length) return rentals;
+      
+      const conversationIds = [...new Set(rentals.map((r) => r.id))];
+      const { data: conversations } = await supabase
+        .from("conversations")
+        .select("id,request_id")
+        .in("request_id", conversationIds)
+        .eq("context_type", "notes");
+      
+      const conversationMap = new Map<string, string>();
+      for (const conv of conversations ?? []) {
+        const row = conv as { id: string; request_id: string };
+        conversationMap.set(row.request_id, row.id);
+      }
+      
+      return rentals.map((r) => ({
+        ...r,
+        conversation_id: conversationMap.get(r.id) ?? null,
+      }));
     },
     enabled: Boolean(sellerId),
   });
@@ -82,7 +102,26 @@ export function useBuyerNotesRentals(buyerId: string | null | undefined) {
         .eq("buyer_id", buyerId!)
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return (data ?? []) as unknown as NotesRentalRow[];
+      const rentals = (data ?? []) as unknown as NotesRentalRow[];
+      if (!rentals.length) return rentals;
+      
+      const conversationIds = [...new Set(rentals.map((r) => r.id))];
+      const { data: conversations } = await supabase
+        .from("conversations")
+        .select("id,request_id")
+        .in("request_id", conversationIds)
+        .eq("context_type", "notes"); 
+      
+      const conversationMap = new Map<string, string>();
+      for (const conv of conversations ?? []) {
+        const row = conv as { id: string; request_id: string };
+        conversationMap.set(row.request_id, row.id);
+      }
+      
+      return rentals.map((r) => ({
+        ...r,
+        conversation_id: conversationMap.get(r.id) ?? null,
+      }));
     },
     enabled: Boolean(buyerId),
   });

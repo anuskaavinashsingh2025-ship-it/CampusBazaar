@@ -76,28 +76,28 @@ export async function autoArchiveInactiveChats() {
   console.log(`[ChatInactivity] Auto-archived ${inactiveConversations.length} conversations`);
 }
 
-// Permanently delete conversations after 30 days in archive
-export async function autoDeleteArchivedChats() {
-  const thirtyDaysAgo = new Date();
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+// Permanently delete completed conversations after 5 days
+export async function autoDeleteCompletedChats() {
+  const fiveDaysAgo = new Date();
+  fiveDaysAgo.setDate(fiveDaysAgo.getDate() - 5);
 
-  const { data: archivedConversations, error } = await supabase
+  const { data: completedConversations, error } = await supabase
     .from(CONVERSATIONS_TABLE)
     .select("id, buyer_id, seller_id, listing_title")
-    .in("status", ["archived", "auto_archived", "completed"])
-    .lt("archived_at", thirtyDaysAgo.toISOString())
-    .not("archived_at", "is", null);
+    .eq("status", "completed")
+    .lt("completed_at", fiveDaysAgo.toISOString())
+    .not("completed_at", "is", null);
 
   if (error) {
-    console.error("[ChatInactivity] Error fetching archived conversations:", error);
+    console.error("[ChatInactivity] Error fetching completed conversations:", error);
     return;
   }
 
-  if (!archivedConversations || archivedConversations.length === 0) {
+  if (!completedConversations || completedConversations.length === 0) {
     return;
   }
 
-  for (const conversation of archivedConversations) {
+  for (const conversation of completedConversations) {
     // Delete all messages for this conversation
     const { error: messagesError } = await supabase
       .from(MESSAGES_TABLE)
@@ -120,18 +120,18 @@ export async function autoDeleteArchivedChats() {
       continue;
     }
 
-    console.log(`[ChatInactivity] Deleted conversation ${conversation.id} about "${conversation.listing_title}"`);
+    console.log(`[ChatInactivity] Deleted completed conversation ${conversation.id} about "${conversation.listing_title}"`);
   }
 
-  console.log(`[ChatInactivity] Auto-deleted ${archivedConversations.length} archived conversations`);
+  console.log(`[ChatInactivity] Auto-deleted ${completedConversations.length} completed conversations`);
 }
 
-// Get days until deletion for archived conversations
-export function getDaysUntilDeletion(archivedAt: string | null): number | null {
-  if (!archivedAt) return null;
-  const archivedDate = new Date(archivedAt);
-  const deletionDate = new Date(archivedDate);
-  deletionDate.setDate(deletionDate.getDate() + 30);
+// Get days until deletion for completed conversations (5 days)
+export function getDaysUntilDeletion(completedAt: string | null): number | null {
+  if (!completedAt) return null;
+  const completedDate = new Date(completedAt);
+  const deletionDate = new Date(completedDate);
+  deletionDate.setDate(deletionDate.getDate() + 5);
   const now = new Date();
   const diffTime = deletionDate.getTime() - now.getTime();
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));

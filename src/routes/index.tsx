@@ -117,7 +117,7 @@ function MarketplaceHome() {
 
       if (error) throw error;
       const productRows = (rows ?? []) as unknown as ProductListingRow[];
-      if (!productRows.length) return [] as ProductCardModel[];
+      if (!productRows.length) return { productRows: [], sellers: [], imageRows: [] };
 
       const sellerIds = [...new Set(productRows.map((p) => p.seller_id))];
       const { data: sellers } = await supabase
@@ -125,27 +125,34 @@ function MarketplaceHome() {
         .select("user_id,slug,display_name,avatar_url")
         .in("user_id", sellerIds);
 
-      type SellerRefLocal = { user_id: string; slug: string; display_name: string; avatar_url: string | null };
-      const sellerMap = new Map<string, SellerRefLocal>(
-        (sellers ?? []).map((s: SellerRefLocal) => [s.user_id, s]),
-      );
-
       const productIds = productRows.map((p) => p.id);
       const { data: images } = await supabase
         .from(PRODUCT_IMAGES_TABLE)
         .select("product_id,storage_path,sort_index")
         .in("product_id", productIds);
 
-      const imageRows = (images ?? []) as unknown as ProductImageRow[];
+      return {
+        productRows,
+        sellers: sellers ?? [],
+        imageRows: (images ?? []) as unknown as ProductImageRow[],
+      };
+    },
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    select: (data) => {
+      const sellerMap = new Map<string, { user_id: string; slug: string; display_name: string; avatar_url: string | null }>(
+        data.sellers.map((s: any) => [s.user_id, s]),
+      );
+
       const imageMap = new Map<string, { storage_path: string; sort_index: number }[]>();
-      for (const img of imageRows) {
+      for (const img of data.imageRows) {
         const key = img.product_id;
         const arr = imageMap.get(key) ?? [];
         arr.push({ storage_path: img.storage_path, sort_index: img.sort_index });
         imageMap.set(key, arr);
       }
 
-      return productRows.map((p) => {
+      return data.productRows.map((p) => {
         const sorted = (imageMap.get(p.id) ?? []).sort((a, b) => a.sort_index - b.sort_index);
         const cover = sorted[0]?.storage_path ?? null;
         const coverImageUrl = cover
@@ -170,8 +177,6 @@ function MarketplaceHome() {
         } satisfies ProductCardModel;
       });
     },
-    staleTime: 5 * 60 * 1000,
-    gcTime: 10 * 60 * 1000,
   });
 
   // Selected category for homepage category strip (affects Fresh recommendations)
@@ -191,7 +196,7 @@ function MarketplaceHome() {
         .limit(24);
       if (error) throw error;
       const rows = (data ?? []) as any[];
-      if (!rows.length) return [];
+      if (!rows.length) return { rows: [], images: [], sellers: [] };
 
       const ids = rows.map((r) => r.id);
       const sellerIds = [...new Set(rows.map((r) => r.seller_id))];
@@ -210,8 +215,17 @@ function MarketplaceHome() {
           : Promise.resolve({ data: [] }),
       ]);
 
+      return {
+        rows,
+        images: images ?? [],
+        sellers: sellers ?? [],
+      };
+    },
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    select: (data) => {
       const imageMap = new Map<string, string>();
-      for (const img of images ?? []) {
+      for (const img of data.images) {
         const row = img as { food_listing_id: string; storage_path: string; sort_index: number };
         if (!imageMap.has(row.food_listing_id)) {
           imageMap.set(
@@ -222,10 +236,10 @@ function MarketplaceHome() {
       }
 
       const sellerMap = new Map(
-        (sellers ?? []).map((s: any) => [s.user_id, { user_id: s.user_id, slug: s.slug, display_name: s.display_name, avatar_url: s.avatar_url }]),
+        data.sellers.map((s: any) => [s.user_id, { user_id: s.user_id, slug: s.slug, display_name: s.display_name, avatar_url: s.avatar_url }]),
       );
 
-      return rows.map((r) => ({
+      return data.rows.map((r) => ({
         id: r.id,
         title: r.product_name,
         price: Number(r.price),
@@ -242,8 +256,6 @@ function MarketplaceHome() {
         coverImageUrl: imageMap.get(r.id) ?? null,
       }));
     },
-    staleTime: 5 * 60 * 1000,
-    gcTime: 10 * 60 * 1000,
   });
 
   const { data: rentalRecs = [], isLoading: loadingRentals } = useQuery({
@@ -259,7 +271,7 @@ function MarketplaceHome() {
         .limit(24);
       if (error) throw error;
       const rows = (data ?? []) as any[];
-      if (!rows.length) return [];
+      if (!rows.length) return { rows: [], images: [], sellers: [] };
 
       const ids = rows.map((r) => r.id);
       const sellerIds = [...new Set(rows.map((r) => r.seller_id))];
@@ -278,8 +290,17 @@ function MarketplaceHome() {
           : Promise.resolve({ data: [] }),
       ]);
 
+      return {
+        rows,
+        images: images ?? [],
+        sellers: sellers ?? [],
+      };
+    },
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    select: (data) => {
       const imageMap = new Map<string, string>();
-      for (const img of images ?? []) {
+      for (const img of data.images) {
         const row = img as { rental_id: string; storage_path: string; sort_index: number };
         if (!imageMap.has(row.rental_id)) {
           imageMap.set(
@@ -290,7 +311,7 @@ function MarketplaceHome() {
       }
 
       const sellerMap = new Map(
-        (sellers ?? []).map((s: any) => [
+        data.sellers.map((s: any) => [
           s.user_id,
           {
             user_id: s.user_id,
@@ -301,7 +322,7 @@ function MarketplaceHome() {
         ]),
       );
 
-      return rows.map((r) => ({
+      return data.rows.map((r) => ({
         id: r.id,
         title: r.title,
         price: Number(r.rent_price_per_day),
@@ -318,7 +339,6 @@ function MarketplaceHome() {
         coverImageUrl: imageMap.get(r.id) ?? null,
       }));
     },
-    refetchInterval: 10000,
   });
 
   const { data: notesRecs = [], isLoading: loadingNotes } = useQuery({
@@ -326,22 +346,24 @@ function MarketplaceHome() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("notes_listings")
-        .select("id,title,price,category,custom_category,status,seller_id,created_at")
+       .select(
+"id,title,daily_rental_price,category,status,seller_id,created_at"
+)
         .eq("status", "available")
         .order("created_at", { ascending: false })
         .limit(24);
       if (error) throw error;
       const rows = (data ?? []) as any[];
-      if (!rows.length) return [];
+      if (!rows.length) return { rows: [], images: [], sellers: [] };
 
       const ids = rows.map((r) => r.id);
       const sellerIds = [...new Set(rows.map((r) => r.seller_id))];
       const [{ data: images }, { data: sellers }] = await Promise.all([
         ids.length
           ? supabase
-              .from("notes_images")
-              .select("note_id,storage_path,sort_index")
-              .in("note_id", ids)
+              .from("notes_assets")
+              .select("listing_id,storage_path,sort_index")
+              .in("listing_id", ids)
           : Promise.resolve({ data: [] }),
         sellerIds.length
           ? supabase
@@ -351,19 +373,28 @@ function MarketplaceHome() {
           : Promise.resolve({ data: [] }),
       ]);
 
+      return {
+        rows,
+        images: images ?? [],
+        sellers: sellers ?? [],
+      };
+    },
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    select: (data) => {
       const imageMap = new Map<string, string>();
-      for (const img of images ?? []) {
-        const row = img as { note_id: string; storage_path: string; sort_index: number };
-        if (!imageMap.has(row.note_id)) {
+      for (const img of data.images) {
+        const row = img as { listing_id: string; storage_path: string; sort_index: number };
+        if (!imageMap.has(row.listing_id)) {
           imageMap.set(
-            row.note_id,
-            supabase.storage.from("notes-images").getPublicUrl(row.storage_path).data.publicUrl,
+            row.listing_id,
+            supabase.storage.from("notes-assets").getPublicUrl(row.storage_path).data.publicUrl,
           );
         }
       }
 
       const sellerMap = new Map(
-        (sellers ?? []).map((s: any) => [
+        data.sellers.map((s: any) => [
           s.user_id,
           {
             user_id: s.user_id,
@@ -374,12 +405,12 @@ function MarketplaceHome() {
         ]),
       );
 
-      return rows.map((r) => ({
+      return data.rows.map((r) => ({
         id: r.id,
         title: r.title,
-        price: Number(r.price),
+        price: Number(r.daily_rental_price),
         category: r.category,
-        custom_category: r.custom_category,
+       
         condition: "",
         urgent_sale: false,
         seller: sellerMap.get(r.seller_id) ?? {
@@ -391,8 +422,6 @@ function MarketplaceHome() {
         coverImageUrl: imageMap.get(r.id) ?? null,
       }));
     },
-    staleTime: 5 * 60 * 1000,
-    gcTime: 10 * 60 * 1000,
   });
 
   const filtered = useMemo(() => {

@@ -41,6 +41,21 @@ type NormalizedWishlistItem = {
   createdAt: string;
 };
 
+type NormalizedWishlistItemRaw = {
+  listingId: string;
+  listingType: ListingType;
+  title: string;
+  price: number | null;
+  category: string;
+  coverStoragePath: string | null;
+  status: string;
+  sellerName: string;
+  sellerSlug: string | null;
+  sellerAvatar: string | null;
+  soldOut: boolean;
+  createdAt: string;
+};
+
 const TABS: { value: "all" | ListingType | "sold"; label: string }[] = [
   { value: "all", label: "All" },
   { value: "product", label: "Products" },
@@ -76,6 +91,24 @@ function WishlistPage() {
     enabled: wishlistRows.length > 0,
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
+    select: (data: NormalizedWishlistItemRaw[]) => {
+      return data.map((item) => {
+        let coverUrl = null;
+        if (item.coverStoragePath) {
+          if (item.listingType === "product") {
+            coverUrl = supabase.storage.from("product-images").getPublicUrl(item.coverStoragePath).data.publicUrl;
+          } else if (item.listingType === "rental") {
+            coverUrl = supabase.storage.from("rental-images").getPublicUrl(item.coverStoragePath).data.publicUrl;
+          } else if (item.listingType === "food") {
+            coverUrl = supabase.storage.from("food-images").getPublicUrl(item.coverStoragePath).data.publicUrl;
+          }
+        }
+        return {
+          ...item,
+          coverUrl,
+        } as NormalizedWishlistItem;
+      });
+    },
   });
 
   const filtered = useMemo(() => {
@@ -274,9 +307,9 @@ function WishlistPage() {
   );
 }
 
-async function resolveWishlistItems(rows: WishlistRow[]): Promise<NormalizedWishlistItem[]> {
+async function resolveWishlistItems(rows: WishlistRow[]): Promise<NormalizedWishlistItemRaw[]> {
   console.log("[Wishlist Rows]", rows);
-  const results: NormalizedWishlistItem[] = [];
+  const results: NormalizedWishlistItemRaw[] = [];
 
   for (const row of rows) {
     const listingId = row.listing_id;
@@ -304,11 +337,7 @@ async function resolveWishlistItems(rows: WishlistRow[]): Promise<NormalizedWish
           .eq("user_id", product.seller_id)
           .single();
 
-        const coverUrl =
-          images && images.length > 0
-            ? supabase.storage.from("product-images").getPublicUrl(images[0].storage_path).data
-                .publicUrl
-            : null;
+        const coverStoragePath = images && images.length > 0 ? images[0].storage_path : null;
 
         results.push({
           listingId,
@@ -319,7 +348,7 @@ async function resolveWishlistItems(rows: WishlistRow[]): Promise<NormalizedWish
             product.category === "Others" && product.custom_category
               ? product.custom_category
               : product.category,
-          coverUrl,
+          coverStoragePath,
           status: product.status,
           sellerName: seller?.display_name ?? "Seller",
           sellerSlug: seller?.slug ?? null,
@@ -357,11 +386,7 @@ async function resolveWishlistItems(rows: WishlistRow[]): Promise<NormalizedWish
           .eq("user_id", rental.seller_id)
           .single();
 
-        const coverUrl =
-          images && images.length > 0
-            ? supabase.storage.from("rental-images").getPublicUrl(images[0].storage_path).data
-                .publicUrl
-            : null;
+        const coverStoragePath = images && images.length > 0 ? images[0].storage_path : null;
 
         results.push({
           listingId,
@@ -372,7 +397,7 @@ async function resolveWishlistItems(rows: WishlistRow[]): Promise<NormalizedWish
             rental.category === "Others" && rental.custom_category
               ? rental.custom_category
               : rental.category,
-          coverUrl,
+          coverStoragePath,
           status: rental.status,
           sellerName: seller?.display_name ?? "Seller",
           sellerSlug: seller?.slug ?? null,
@@ -410,11 +435,7 @@ async function resolveWishlistItems(rows: WishlistRow[]): Promise<NormalizedWish
           .eq("user_id", food.seller_id)
           .single();
 
-        const coverUrl =
-          images && images.length > 0
-            ? supabase.storage.from("food-images").getPublicUrl(images[0].storage_path).data
-                .publicUrl
-            : null;
+        const coverStoragePath = images && images.length > 0 ? images[0].storage_path : null;
 
         results.push({
           listingId,
@@ -422,7 +443,7 @@ async function resolveWishlistItems(rows: WishlistRow[]): Promise<NormalizedWish
           title: food.product_name,
           price: Number(food.price),
           category: food.category,
-          coverUrl,
+          coverStoragePath,
           status: food.status,
           sellerName: seller?.display_name ?? "Seller",
           sellerSlug: seller?.slug ?? null,
@@ -442,7 +463,7 @@ async function resolveWishlistItems(rows: WishlistRow[]): Promise<NormalizedWish
     try {
       const { data: notes } = await supabase
         .from("notes_listings" as unknown as keyof Database["public"]["Tables"])
-        .select("id,title,subject,status,seller_id,is_free,price")
+        .select("id,title,subject,status,seller_id,is_free,daily_rental_price")
         .eq("id", listingId)
         .single();
 
@@ -457,9 +478,9 @@ async function resolveWishlistItems(rows: WishlistRow[]): Promise<NormalizedWish
           listingId,
           listingType: "notes",
           title: notes.title,
-          price: notes.is_free ? 0 : Number(notes.price ?? 0),
+          price: notes.is_free ? 0 : Number(notes.daily_rental_price ?? 0),
           category: notes.subject,
-          coverUrl: null,
+          coverStoragePath: null,
           status: notes.status,
           sellerName: seller?.display_name ?? "Seller",
           sellerSlug: seller?.slug ?? null,

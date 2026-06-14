@@ -34,6 +34,7 @@ export type ProductRequestRow = {
   status: ProductRequestStatus;
   created_at: string;
   updated_at: string;
+  conversation_id: string | null;
 };
 
 export type ProductRequestDetails = ProductRequestRow & {
@@ -58,13 +59,18 @@ async function enrichProductRequests(rows: ProductRequestRow[]): Promise<Product
   const productIds = [...new Set(rows.map((r) => r.product_id))];
   const userIds = [...new Set(rows.flatMap((r) => [r.buyer_id, r.seller_id]))];
 
-  const [{ data: products }, { data: images }, { data: profiles }] = await Promise.all([
+  const [{ data: products }, { data: images }, { data: profiles }, { data: conversations }] = await Promise.all([
     supabase.from(PRODUCTS_TABLE).select("id,title,price,status").in("id", productIds),
     supabase
       .from(PRODUCT_IMAGES_TABLE)
       .select("product_id,storage_path,sort_index")
       .in("product_id", productIds),
     supabase.from("profiles").select("id,full_name,avatar_url,hostel_block").in("id", userIds),
+    supabase
+      .from("conversations")
+      .select("id,context_type,context_id,request_id")
+      .in("request_id", rows.map((r) => r.id))
+      .in("context_type", ["product"]),
   ]);
 
   const imageMap = new Map<string, string>();
@@ -99,6 +105,12 @@ async function enrichProductRequests(rows: ProductRequestRow[]): Promise<Product
     ),
   );
 
+  const conversationMap = new Map<string, string>();
+  for (const conv of conversations ?? []) {
+    const row = conv as { id: string; request_id: string };
+    conversationMap.set(row.request_id, row.id);
+  }
+
   return rows.map((r) => {
     const product = (products ?? []).find((x: { id: string }) => x.id === r.product_id) as
       | { id: string; title: string; price: number; status: string }
@@ -106,6 +118,7 @@ async function enrichProductRequests(rows: ProductRequestRow[]): Promise<Product
     return {
       ...r,
       offered_price: r.offered_price != null ? Number(r.offered_price) : null,
+      conversation_id: conversationMap.get(r.id) ?? null,
       product: product
         ? {
             ...product,

@@ -84,7 +84,7 @@ function SellerPage() {
   const { data: products = [], isLoading: loadingProducts } = useQuery({
     queryKey: ["seller_products", seller?.user_id, userProfile?.id],
     queryFn: async () => {
-      if (!seller) return [];
+      if (!seller) return { rows: [], images: [] };
       // Ensure we prefer the latest avatar from profiles when building product seller info
       const { data: listings, error } = await supabase
         .from("product_listings" as unknown as keyof Database["public"]["Tables"])
@@ -98,15 +98,24 @@ function SellerPage() {
       if (error) throw error;
       const rows = listings ?? [];
       const ids = rows.map((r: { id: string }) => r.id);
-      if (!ids.length) return [];
+      if (!ids.length) return { rows: [], images: [] };
 
       const { data: images } = await supabase
         .from("product_images" as unknown as keyof Database["public"]["Tables"])
         .select("product_id,storage_path,sort_index")
         .in("product_id", ids);
 
+      return {
+        rows,
+        images: images ?? [],
+      };
+    },
+    enabled: Boolean(seller?.user_id && userProfile),
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    select: (data) => {
       const imageMap = new Map<string, string>();
-      for (const img of images ?? []) {
+      for (const img of data.images) {
         const row = img as { product_id: string; storage_path: string; sort_index: number };
         if (!imageMap.has(row.product_id)) {
           imageMap.set(
@@ -116,7 +125,7 @@ function SellerPage() {
         }
       }
 
-      return rows.map(
+      return data.rows.map(
         (p: {
           id: string;
           title: string;
@@ -146,15 +155,12 @@ function SellerPage() {
         }),
       );
     },
-    enabled: Boolean(seller?.user_id && userProfile),
-    staleTime: 5 * 60 * 1000,
-    gcTime: 10 * 60 * 1000,
   });
 
   const { data: rentals = [], isLoading: loadingRentals } = useQuery({
     queryKey: ["seller_rentals", seller?.user_id, userProfile?.id],
     queryFn: async () => {
-      if (!seller) return [];
+      if (!seller) return { rows: [], images: [] };
       const { data, error } = await supabase
         .from("rental_listings" as unknown as keyof Database["public"]["Tables"])
         .select(
@@ -167,15 +173,24 @@ function SellerPage() {
       if (error) throw error;
       const rows = data ?? [];
       const ids = rows.map((r: { id: string }) => r.id);
-      if (!ids.length) return [];
+      if (!ids.length) return { rows: [], images: [] };
 
       const { data: images } = await supabase
         .from("rental_images" as unknown as keyof Database["public"]["Tables"])
         .select("rental_id,storage_path,sort_index")
         .in("rental_id", ids);
 
+      return {
+        rows,
+        images: images ?? [],
+      };
+    },
+    enabled: Boolean(seller?.user_id && userProfile),
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    select: (data) => {
       const imageMap = new Map<string, string>();
-      for (const img of images ?? []) {
+      for (const img of data.images) {
         const row = img as { rental_id: string; storage_path: string; sort_index: number };
         if (!imageMap.has(row.rental_id)) {
           imageMap.set(
@@ -185,7 +200,7 @@ function SellerPage() {
         }
       }
 
-      return rows.map(
+      return data.rows.map(
         (r: {
           id: string;
           title: string;
@@ -212,15 +227,12 @@ function SellerPage() {
         }),
       );
     },
-    enabled: Boolean(seller?.user_id && userProfile),
-    staleTime: 5 * 60 * 1000,
-    gcTime: 10 * 60 * 1000,
   });
 
   const { data: notes = [], isLoading: loadingNotes } = useQuery({
     queryKey: ["seller_notes", seller?.user_id, userProfile?.id],
     queryFn: async () => {
-      if (!seller) return [];
+      if (!seller) return { rows: [], images: [] };
       const { data, error } = await supabase
         .from("notes_listings" as unknown as keyof Database["public"]["Tables"])
         .select(
@@ -233,7 +245,7 @@ function SellerPage() {
       if (error) throw error;
       const rows = data ?? [];
       const ids = rows.map((r: { id: string }) => r.id);
-      if (!ids.length) return [];
+      if (!ids.length) return { rows: [], images: [] };
 
       const { data: images } = await supabase
         .from("notes_assets" as unknown as keyof Database["public"]["Tables"])
@@ -241,8 +253,17 @@ function SellerPage() {
         .eq("kind", "image")
         .in("listing_id", ids);
 
+      return {
+        rows,
+        images: images ?? [],
+      };
+    },
+    enabled: Boolean(seller?.user_id && userProfile),
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    select: (data) => {
       const imageMap = new Map<string, string>();
-      for (const img of images ?? []) {
+      for (const img of data.images) {
         const row = img as { listing_id: string; storage_path: string; sort_index: number };
         if (!imageMap.has(row.listing_id)) {
           imageMap.set(
@@ -252,7 +273,7 @@ function SellerPage() {
         }
       }
 
-      return rows.map(
+      return data.rows.map(
         (n: {
           id: string;
           title: string;
@@ -293,15 +314,12 @@ function SellerPage() {
         }),
       );
     },
-    enabled: Boolean(seller?.user_id && userProfile),
-    staleTime: 5 * 60 * 1000,
-    gcTime: 10 * 60 * 1000,
   });
 
   const { data: soldProducts = [] } = useQuery({
     queryKey: ["seller_sold", seller?.user_id, userProfile?.id],
     queryFn: async () => {
-      if (!seller) return [];
+      if (!seller) return { rows: [], images: [] };
       const { data, error } = await supabase
         .from("product_listings" as unknown as keyof Database["public"]["Tables"])
         .select(
@@ -314,15 +332,22 @@ function SellerPage() {
       if (error) throw error;
       const rows = data ?? [];
       const ids = rows.map((r: { id: string }) => r.id);
-      if (!ids.length) return [];
+      if (!ids.length) return { rows: [], images: [] };
 
       const { data: images } = await supabase
         .from("product_images" as unknown as keyof Database["public"]["Tables"])
         .select("product_id,storage_path,sort_index")
         .in("product_id", ids);
 
+      return {
+        rows,
+        images: images ?? [],
+      };
+    },
+    enabled: Boolean(seller?.user_id && userProfile),
+    select: (data) => {
       const imageMap = new Map<string, string>();
-      for (const img of images ?? []) {
+      for (const img of data.images) {
         const row = img as { product_id: string; storage_path: string; sort_index: number };
         if (!imageMap.has(row.product_id)) {
           imageMap.set(
@@ -332,7 +357,7 @@ function SellerPage() {
         }
       }
 
-      return rows.map(
+      return data.rows.map(
         (p: {
           id: string;
           title: string;
@@ -363,13 +388,12 @@ function SellerPage() {
         }),
       );
     },
-    enabled: Boolean(seller?.user_id && userProfile),
   });
 
   const { data: completedRentals = [] } = useQuery({
     queryKey: ["seller_completed_rentals", seller?.user_id, userProfile?.id],
     queryFn: async () => {
-      if (!seller) return [];
+      if (!seller) return { rows: [], images: [] };
       const { data, error } = await supabase
         .from("rental_listings" as unknown as keyof Database["public"]["Tables"])
         .select(
@@ -382,15 +406,22 @@ function SellerPage() {
       if (error) throw error;
       const rows = data ?? [];
       const ids = rows.map((r: { id: string }) => r.id);
-      if (!ids.length) return [];
+      if (!ids.length) return { rows: [], images: [] };
 
       const { data: images } = await supabase
         .from("rental_images" as unknown as keyof Database["public"]["Tables"])
         .select("rental_id,storage_path,sort_index")
         .in("rental_id", ids);
 
+      return {
+        rows,
+        images: images ?? [],
+      };
+    },
+    enabled: Boolean(seller?.user_id && userProfile),
+    select: (data) => {
       const imageMap = new Map<string, string>();
-      for (const img of images ?? []) {
+      for (const img of data.images) {
         const row = img as { rental_id: string; storage_path: string; sort_index: number };
         if (!imageMap.has(row.rental_id)) {
           imageMap.set(
@@ -400,7 +431,7 @@ function SellerPage() {
         }
       }
 
-      return rows.map(
+      return data.rows.map(
         (r: {
           id: string;
           title: string;
@@ -429,17 +460,16 @@ function SellerPage() {
         }),
       );
     },
-    enabled: Boolean(seller?.user_id && userProfile),
   });
 
   const { data: completedNotes = [] } = useQuery({
     queryKey: ["seller_completed_notes", seller?.user_id, userProfile?.id],
     queryFn: async () => {
-      if (!seller) return [];
+      if (!seller) return { rows: [], images: [] };
       const { data, error } = await supabase
         .from("notes_listings" as unknown as keyof Database["public"]["Tables"])
         .select(
-          "id,title,price,category,custom_category,condition,is_digital,is_free,status,seller_id,updated_at",
+          "id,title,daily_rental_price,category,condition,is_digital,is_free,status,seller_id,updated_at",
         )
         .eq("seller_id", seller.user_id)
         .in("status", ["rented_out", "unavailable"])
@@ -448,7 +478,7 @@ function SellerPage() {
       if (error) throw error;
       const rows = data ?? [];
       const ids = rows.map((r: { id: string }) => r.id);
-      if (!ids.length) return [];
+      if (!ids.length) return { rows: [], images: [] };
 
       const { data: images } = await supabase
         .from("notes_assets" as unknown as keyof Database["public"]["Tables"])
@@ -456,8 +486,15 @@ function SellerPage() {
         .eq("kind", "image")
         .in("listing_id", ids);
 
+      return {
+        rows,
+        images: images ?? [],
+      };
+    },
+    enabled: Boolean(seller?.user_id && userProfile),
+    select: (data) => {
       const imageMap = new Map<string, string>();
-      for (const img of images ?? []) {
+      for (const img of data.images) {
         const row = img as { listing_id: string; storage_path: string; sort_index: number };
         if (!imageMap.has(row.listing_id)) {
           imageMap.set(
@@ -467,11 +504,11 @@ function SellerPage() {
         }
       }
 
-      return rows.map(
+      return data.rows.map(
         (p: {
           id: string;
           title: string;
-          price: number;
+          daily_rental_price: number;
           category: string;
           custom_category: string | null;
           condition: string;
@@ -483,7 +520,7 @@ function SellerPage() {
         }): ProductCardModel & { updated_at: string; status: string } => ({
           id: p.id,
           title: p.title,
-          price: Number(p.price),
+          price: Number(p.daily_rental_price),
           category: p.category,
           custom_category: p.custom_category,
           condition: p.condition,
@@ -501,13 +538,12 @@ function SellerPage() {
         }),
       );
     },
-    enabled: Boolean(seller?.user_id && userProfile),
   });
 
   const { data: completedFood = [] } = useQuery({
     queryKey: ["seller_completed_food", seller?.user_id, userProfile?.id],
     queryFn: async () => {
-      if (!seller) return [];
+      if (!seller) return { rows: [], images: [] };
       const { data, error } = await supabase
         .from("food_listings" as unknown as keyof Database["public"]["Tables"])
         .select(
@@ -520,15 +556,22 @@ function SellerPage() {
       if (error) throw error;
       const rows = data ?? [];
       const ids = rows.map((r: { id: string }) => r.id);
-      if (!ids.length) return [];
+      if (!ids.length) return { rows: [], images: [] };
 
       const { data: images } = await supabase
         .from("food_images" as unknown as keyof Database["public"]["Tables"])
         .select("food_listing_id,storage_path,sort_index")
         .in("food_listing_id", ids);
 
+      return {
+        rows,
+        images: images ?? [],
+      };
+    },
+    enabled: Boolean(seller?.user_id && userProfile),
+    select: (data) => {
       const imageMap = new Map<string, string>();
-      for (const img of images ?? []) {
+      for (const img of data.images) {
         const row = img as { food_listing_id: string; storage_path: string; sort_index: number };
         if (!imageMap.has(row.food_listing_id)) {
           imageMap.set(
@@ -538,7 +581,7 @@ function SellerPage() {
         }
       }
 
-      return rows.map(
+      return data.rows.map(
         (p: {
           id: string;
           product_name: string;
@@ -569,7 +612,6 @@ function SellerPage() {
         }),
       );
     },
-    enabled: Boolean(seller?.user_id && userProfile),
   });
 
   const { data: sellerMetrics } = useQuery({

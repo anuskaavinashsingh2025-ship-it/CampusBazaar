@@ -104,8 +104,16 @@ export async function fetchNotificationPreferences(
     .from(PREFS_TABLE)
     .insert({ user_id: userId, ...defaults })
     .select("*")
-    .single();
-  if (insertErr) throw insertErr;
+    .maybeSingle();
+  if (insertErr) {
+    console.error("[Notification Preferences] Insert failed:", {
+      error: insertErr.message,
+      code: insertErr.code,
+      userId,
+    });
+    // Return defaults if insert fails due to RLS or other issues
+    return { user_id: userId, ...defaults };
+  }
   return inserted as unknown as NotificationPreferences;
 }
 

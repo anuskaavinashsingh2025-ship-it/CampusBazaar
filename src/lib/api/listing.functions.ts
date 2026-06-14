@@ -38,6 +38,7 @@ export const deleteListing = createServerFn({ method: "POST" })
       notes: {
         table: "notes_listings",
         imagesTable: "notes_assets",
+        imagesTableIdCol: "listing_id",
         bucket: "notes-assets",
         requestsTable: "notes_purchase_requests",
         requestCol: "notes_listing_id",
@@ -47,6 +48,7 @@ export const deleteListing = createServerFn({ method: "POST" })
     type MapEntry = {
       table: keyof import("@/integrations/supabase/types").Database["public"]["Tables"];
       imagesTable: keyof import("@/integrations/supabase/types").Database["public"]["Tables"];
+      imagesTableIdCol?: string;
       bucket: string;
       requestsTable: string;
       requestCol?: string;
@@ -79,7 +81,7 @@ export const deleteListing = createServerFn({ method: "POST" })
     // fetch image storage paths
     const imagesRes = await (supabaseAdmin as unknown as { from: (table: string) => { select: (cols: string) => { eq: (col: string, val: string) => Promise<{ data: any[] | null; error: any }>; }; }; }).from(
       cfg.imagesTable,
-    ).select("storage_path").eq(cfg.requestCol === undefined ? "id" : cfg.requestCol!, itemId as string);
+    ).select("storage_path").eq(cfg.imagesTableIdCol ?? (cfg.requestCol === undefined ? "id" : cfg.requestCol!), itemId as string);
     const images = (imagesRes.data ?? []) as Array<{ storage_path?: string }>;
     const paths: string[] = images.map((r) => r.storage_path ?? "").filter(Boolean);
 
@@ -97,17 +99,21 @@ export const deleteListing = createServerFn({ method: "POST" })
       await (supabaseAdmin as unknown as { from: (table: string) => { delete: () => { eq: (col: string, val: string) => Promise<any>; }; }; })
         .from(cfg.imagesTable)
         .delete()
-        .eq(cfg.requestCol === undefined ? "id" : cfg.requestCol!, itemId as string);
+        .eq(cfg.imagesTableIdCol ?? (cfg.requestCol === undefined ? "id" : cfg.requestCol!), itemId as string);
     } catch (e) {
       console.warn("admin: failed to delete image rows", e);
     }
 
     // delete listing row
-    const delRes = await (supabaseAdmin as unknown as { from: (table: string) => { delete: () => { eq: (col: string, val: string) => Promise<{ error: any }>; }; }; })
+    const delRes = await (supabaseAdmin as unknown as { from: (table: string) => { delete: () => { eq: (col: string, val: string) => { select: (cols: string) => Promise<{ error: any; data?: any[] }>; }; }; }; })
       .from(cfg.table)
       .delete()
-      .eq("id", itemId as string);
+      .eq("id", itemId as string)
+      .select("id");
     if (delRes.error) throw delRes.error;
+    if (!delRes.data || delRes.data.length === 0) {
+      throw new Error("Delete operation removed zero rows");
+    }
 
     // log admin action
     try {

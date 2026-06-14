@@ -32,6 +32,7 @@ export type FoodOrderRow = {
   status: FoodOrderStatus;
   created_at: string;
   updated_at: string;
+  conversation_id: string | null;
 };
 
 const ORDERS_TABLE = "food_orders" as unknown as keyof Database["public"]["Tables"];
@@ -67,7 +68,26 @@ export function useSellerFoodOrders(sellerId: string | null | undefined) {
         .eq("seller_id", sellerId!)
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return (data ?? []) as unknown as FoodOrderRow[];
+      const orders = (data ?? []) as unknown as FoodOrderRow[];
+      if (!orders.length) return orders;
+      
+      const conversationIds = [...new Set(orders.map((o) => o.id))];
+      const { data: conversations } = await supabase
+        .from("conversations")
+        .select("id,request_id")
+        .in("request_id", conversationIds)
+        .in("context_type", ["food"]);
+      
+      const conversationMap = new Map<string, string>();
+      for (const conv of conversations ?? []) {
+        const row = conv as { id: string; request_id: string };
+        conversationMap.set(row.request_id, row.id);
+      }
+      
+      return orders.map((o) => ({
+        ...o,
+        conversation_id: conversationMap.get(o.id) ?? null,
+      }));
     },
     enabled: Boolean(sellerId),
   });
@@ -83,7 +103,26 @@ export function useBuyerFoodOrders(buyerId: string | null | undefined) {
         .eq("buyer_id", buyerId!)
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return (data ?? []) as unknown as FoodOrderRow[];
+      const orders = (data ?? []) as unknown as FoodOrderRow[];
+      if (!orders.length) return orders;
+      
+      const conversationIds = [...new Set(orders.map((o) => o.id))];
+      const { data: conversations } = await supabase
+        .from("conversations")
+        .select("id,request_id")
+        .in("request_id", conversationIds)
+        .in("context_type", ["food"]);
+      
+      const conversationMap = new Map<string, string>();
+      for (const conv of conversations ?? []) {
+        const row = conv as { id: string; request_id: string };
+        conversationMap.set(row.request_id, row.id);
+      }
+      
+      return orders.map((o) => ({
+        ...o,
+        conversation_id: conversationMap.get(o.id) ?? null,
+      }));
     },
     enabled: Boolean(buyerId),
   });

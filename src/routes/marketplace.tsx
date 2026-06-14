@@ -62,7 +62,7 @@ function MarketplacePage() {
           "[Marketplace] Supabase client not ready; returning empty results.",
           selectedCategory,
         );
-        return [] as ProductCardModel[];
+        return { productRows: [], sellers: [], imageRows: [] };
       }
 
       // Validate category: only allow product-like categories to filter the product_listings table.
@@ -79,7 +79,7 @@ function MarketplacePage() {
           "[Marketplace] Selected category is not a marketplace product category:",
           selectedCategory,
         );
-        return [] as ProductCardModel[];
+        return { productRows: [], sellers: [], imageRows: [] };
       }
 
       console.log("supabase =", supabase);
@@ -98,7 +98,7 @@ function MarketplacePage() {
       const { data: rows, error } = await builder;
       if (error) throw error;
       const productRows = (rows ?? []) as unknown as ProductListingRow[];
-      if (!productRows.length) return [] as ProductCardModel[];
+      if (!productRows.length) return { productRows: [], sellers: [], imageRows: [] };
 
       const sellerIds = [...new Set(productRows.map((p) => p.seller_id))];
       const { data: sellers } = await supabase
@@ -106,29 +106,36 @@ function MarketplacePage() {
         .select("user_id,slug,display_name,avatar_url")
         .in("user_id", sellerIds);
 
-      type SellerRefLocal = { user_id: string; slug: string; display_name: string; avatar_url: string | null };
-      const sellerMap = new Map<string, SellerRefLocal>(
-        (sellers ?? []).map((s: SellerRefLocal) => [s.user_id, s]),
-      );
-
       const productIds = productRows.map((p) => p.id);
       const { data: images } = await supabase
         .from(PRODUCT_IMAGES_TABLE)
         .select("product_id,storage_path,sort_index")
         .in("product_id", productIds);
 
-      const imageRows = (images ?? []) as unknown as ProductImageRow[];
+      return {
+        productRows,
+        sellers: sellers ?? [],
+        imageRows: (images ?? []) as unknown as ProductImageRow[],
+      };
+    },
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    select: (data: { productRows: ProductListingRow[]; sellers: any[]; imageRows: ProductImageRow[] }) => {
+      const sellerMap = new Map<string, { user_id: string; slug: string; display_name: string; avatar_url: string | null }>(
+        data.sellers.map((s: any) => [s.user_id, s]),
+      );
+
       const imageMap = new Map<string, { storage_path: string; sort_index: number }[]>();
-      for (const img of imageRows) {
+      for (const img of data.imageRows) {
         const key = img.product_id;
         const arr = imageMap.get(key) ?? [];
         arr.push({ storage_path: img.storage_path, sort_index: img.sort_index });
         imageMap.set(key, arr);
       }
 
-      let rowsToReturn = productRows;
+      let rowsToReturn = data.productRows;
       if (selectedCategory) {
-        rowsToReturn = productRows.filter((p) => {
+        rowsToReturn = data.productRows.filter((p) => {
           const category =
             p.category === "Others" && p.custom_category ? p.custom_category : p.category;
           return category === selectedCategory;
@@ -160,8 +167,6 @@ function MarketplacePage() {
         } satisfies ProductCardModel;
       });
     },
-    staleTime: 5 * 60 * 1000,
-    gcTime: 10 * 60 * 1000,
   });
 
   const visibleProducts = useMemo(

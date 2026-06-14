@@ -5,6 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
+import { deleteListing } from "@/lib/api/listing.functions";
 
 import {
   DropdownMenu,
@@ -105,43 +106,34 @@ export function ListingActions({
     setDeleting(true);
     setConfirmOpen(true);
     try {
-      // Always go through the server function for admins so the
-      // service-role key is used and RLS / storage cleanup is consistent.
-      // The server function also enforces the "no active requests" rule
-      // and the "Admins can delete all product listings" policy correctly.
+      // Admin path: use the server function with service-role key
+      // This bypasses RLS and allows admins to delete any listing
       if (isAdmin) {
-  const tableName = TABLE_FOR[itemType];
+        logDelete("Admin delete using server function", {
+          itemType,
+          itemId,
+        });
 
-  logDelete("Admin delete using RLS policy", {
-    table: tableName,
-    id: itemId,
-  });
+        const result = await deleteListing({ data: { itemType, itemId } });
 
-  const { data: deleteData, error } = await supabase
-    .from(tableName as never)
-    .delete()
-    .eq("id", itemId as never)
-    .select("id");
+        logDelete("Admin server function result", result);
 
-  logDelete("Admin delete result", {
-    data: deleteData,
-    error,
-  });
+        if (!result.ok) {
+          throw new Error("Admin deletion failed");
+        }
 
-  if (error) throw error;
+        onDeleted?.();
 
-  onDeleted?.();
+        qc.invalidateQueries({ queryKey: ["marketplace_page"] });
+        qc.invalidateQueries({ queryKey: ["product_listings"] });
+        qc.invalidateQueries({ queryKey: ["my_listings"] });
+        qc.invalidateQueries({ queryKey: ["seller_listings"] });
 
-  qc.invalidateQueries({ queryKey: ["marketplace_page"] });
-  qc.invalidateQueries({ queryKey: ["product_listings"] });
-  qc.invalidateQueries({ queryKey: ["my_listings"] });
-  qc.invalidateQueries({ queryKey: ["seller_listings"] });
+        qc.refetchQueries({ queryKey: ["marketplace_page"] });
 
-  qc.refetchQueries({ queryKey: ["marketplace_page"] });
-
-  toast.success("Listing removed");
-  return;
-}
+        toast.success("Listing removed");
+        return;
+      }
 
       // ----------------------------------------------------------------
       // Owner path: the current user owns the listing.
@@ -197,6 +189,9 @@ export function ListingActions({
       logDelete("Delete result", { data: deleteData, error });
 
       if (error) throw error;
+      if (!deleteData || deleteData.length === 0) {
+        throw new Error("Delete operation removed zero rows");
+      }
 
       // 4) Local state + cache invalidation + refetch
       onDeleted?.();

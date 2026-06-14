@@ -46,6 +46,7 @@ async function ensureUserRole(userId: string): Promise<void> {
     .from("user_roles")
     .select("id")
     .eq("user_id", userId)
+    .eq("role", "user")
     .maybeSingle();
 
   if (existing) return;

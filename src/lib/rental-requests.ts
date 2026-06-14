@@ -39,6 +39,7 @@ export type RentalRequestRow = {
   message: string | null;
   created_at: string;
   updated_at: string;
+  conversation_id: string | null;
 };
 
 export type RentalRequestDetails = RentalRequestRow & {
@@ -97,13 +98,18 @@ async function enrichRequests(rows: RentalRequestRow[]): Promise<RentalRequestDe
   const rentalIds = [...new Set(rows.map((r) => r.rental_id))];
   const userIds = [...new Set(rows.flatMap((r) => [r.buyer_id, r.seller_id]))];
 
-  const [{ data: rentals }, { data: images }, { data: profiles }] = await Promise.all([
+  const [{ data: rentals }, { data: images }, { data: profiles }, { data: conversations }] = await Promise.all([
     supabase.from(RENTALS_TABLE).select("id,title,rent_price_per_day,status").in("id", rentalIds),
     supabase
       .from(RENTAL_IMAGES_TABLE)
       .select("rental_id,storage_path,sort_index")
       .in("rental_id", rentalIds),
     supabase.from("profiles").select("id,full_name,avatar_url,hostel_block").in("id", userIds),
+    supabase
+      .from("conversations")
+      .select("id,context_type,context_id,request_id")
+      .in("request_id", rows.map((r) => r.id))
+      .in("context_type", ["rental"]),
   ]);
 
   const imageMap = new Map<string, string>();
@@ -138,12 +144,19 @@ async function enrichRequests(rows: RentalRequestRow[]): Promise<RentalRequestDe
     ),
   );
 
+  const conversationMap = new Map<string, string>();
+  for (const conv of conversations ?? []) {
+    const row = conv as { id: string; request_id: string };
+    conversationMap.set(row.request_id, row.id);
+  }
+
   return rows.map((r) => {
     const rental = (rentals ?? []).find((x: { id: string }) => x.id === r.rental_id) as
       | { id: string; title: string; rent_price_per_day: number; status: string }
       | undefined;
     return {
       ...r,
+      conversation_id: conversationMap.get(r.id) ?? null,
       rental: rental
         ? {
             ...rental,

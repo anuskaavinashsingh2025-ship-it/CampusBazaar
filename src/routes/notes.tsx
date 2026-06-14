@@ -217,8 +217,17 @@ function NotesHubPage() {
           : Promise.resolve({ data: [] }),
       ]);
       
+      return {
+        rows,
+        images: images ?? [],
+        sellers: sellers ?? [],
+      };
+    },
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    select: (data) => {
       const imageMap = new Map<string, string>();
-      for (const img of images ?? []) {
+      for (const img of data.images) {
         const row = img as { listing_id: string; storage_path: string; sort_index: number };
         if (!imageMap.has(row.listing_id)) {
           imageMap.set(
@@ -229,17 +238,15 @@ function NotesHubPage() {
       }
       
       const sellerMap = new Map(
-        (sellers ?? []).map((s: any) => [s.user_id, { user_id: s.user_id, slug: s.slug, display_name: s.display_name, avatar_url: s.avatar_url }]),
+        data.sellers.map((s: any) => [s.user_id, { user_id: s.user_id, slug: s.slug, display_name: s.display_name, avatar_url: s.avatar_url }]),
       );
       
-      return rows.map((r) => ({
+      return data.rows.map((r) => ({
         ...r,
         coverUrl: imageMap.get(r.id) ?? null,
         seller: sellerMap.get(r.seller_id),
       }));
     },
-    staleTime: 5 * 60 * 1000,
-    gcTime: 10 * 60 * 1000,
   });
 
   const { data: requests, isLoading: loadingRequests } = useQuery({
@@ -262,26 +269,35 @@ console.log(data, error);
         .select("user_id,slug,display_name,avatar_url")
         .in("user_id", requesterIds);
       
+      // Fetch email from profiles to compute VIT verification status
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("id,email")
+        .in("id", requesterIds);
+
+      return {
+        rows,
+        sellers: sellers ?? [],
+        profiles: profiles ?? [],
+      };
+    },
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    select: (data) => {
       type SellerProfile = { user_id: string; slug: string; display_name: string; avatar_url: string | null };
       const sellerMap = new Map<string, SellerProfile>(
-        (sellers ?? []).map((s: SellerProfile) => [
+        data.sellers.map((s: SellerProfile) => [
           s.user_id,
           { slug: s.slug, display_name: s.display_name, avatar_url: s.avatar_url }
         ])
       );
-      
-      // Fetch VIT verification status from profiles
-      const { data: profiles } = await supabase
-        .from("profiles")
-        .select("id,is_vit_verified")
-        .in("id", requesterIds);
-      
-      type ProfileData = { id: string; is_vit_verified: boolean };
+
+      type ProfileData = { id: string; email: string };
       const profileMap = new Map<string, boolean>(
-        (profiles ?? []).map((p: ProfileData) => [p.id, p.is_vit_verified])
+        data.profiles.map((p: ProfileData) => [p.id, p.email.toLowerCase().endsWith("@vitstudent.ac.in")])
       );
-      
-      return rows.map((r) => {
+
+      return data.rows.map((r) => {
         const seller = sellerMap.get(r.requester_id);
         const isVerified = profileMap.get(r.requester_id) ?? r.requester?.is_vit_verified ?? false;
         return {
@@ -295,8 +311,6 @@ console.log(data, error);
         };
       });
     },
-    staleTime: 5 * 60 * 1000,
-    gcTime: 10 * 60 * 1000,
   });
 
   const filteredListings = useMemo(() => {
