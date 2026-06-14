@@ -60,6 +60,8 @@ function SellerPage() {
       if (error) throw error;
       return data;
     },
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
   });
 
   const { data: userProfile } = useQuery({
@@ -75,6 +77,8 @@ function SellerPage() {
       return data;
     },
     enabled: Boolean(seller?.user_id),
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
   });
 
   const { data: products = [], isLoading: loadingProducts } = useQuery({
@@ -143,6 +147,8 @@ function SellerPage() {
       );
     },
     enabled: Boolean(seller?.user_id && userProfile),
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
   });
 
   const { data: rentals = [], isLoading: loadingRentals } = useQuery({
@@ -207,6 +213,8 @@ function SellerPage() {
       );
     },
     enabled: Boolean(seller?.user_id && userProfile),
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
   });
 
   const { data: notes = [], isLoading: loadingNotes } = useQuery({
@@ -286,6 +294,8 @@ function SellerPage() {
       );
     },
     enabled: Boolean(seller?.user_id && userProfile),
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
   });
 
   const { data: soldProducts = [] } = useQuery({

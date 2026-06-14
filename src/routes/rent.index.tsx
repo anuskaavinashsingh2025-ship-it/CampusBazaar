@@ -163,7 +163,8 @@ function RentFeedPage() {
         return { ...r, coverUrl, seller: sellerMap.get(r.seller_id) };
       });
     },
-    refetchInterval: 10000,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
   });
 
   const filtered = useMemo(() => {

@@ -160,7 +160,8 @@ export function useNotifications(userId: string | null | undefined) {
     queryKey: notificationsQueryKey(userId ?? null),
     queryFn: () => fetchNotifications(userId!),
     enabled: Boolean(userId),
-    refetchInterval: 15000,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
   });
 }
 
@@ -213,7 +214,8 @@ export function useUnreadNotificationCount(userId: string | null | undefined) {
     queryKey: unreadCountQueryKey(userId ?? null),
     queryFn: () => fetchUnreadCount(userId!),
     enabled: Boolean(userId),
-    refetchInterval: 15000,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
     retry: false,
     throwOnError: false,
   });

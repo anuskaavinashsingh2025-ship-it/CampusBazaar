@@ -428,7 +428,8 @@ export function useConversations(userId: string | null | undefined) {
     queryKey: conversationsQueryKey(userId ?? null),
     queryFn: () => fetchConversations(userId!),
     enabled: Boolean(userId),
-    refetchInterval: 10000,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
   });
 }
 
@@ -437,7 +438,8 @@ export function useUnreadChatCount(userId: string | null | undefined) {
     queryKey: unreadChatsQueryKey(userId ?? null),
     queryFn: () => fetchUnreadChatCount(userId!),
     enabled: Boolean(userId),
-    refetchInterval: 10000,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
     retry: false,
     throwOnError: false,
   });
@@ -589,7 +591,8 @@ export function usePresence(userId: string | null | undefined) {
       } | null;
     },
     enabled: Boolean(userId),
-    refetchInterval: 5000,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
   });
 }
 

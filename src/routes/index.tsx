@@ -170,7 +170,8 @@ function MarketplaceHome() {
         } satisfies ProductCardModel;
       });
     },
-    refetchInterval: 5000,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
   });
 
   // Selected category for homepage category strip (affects Fresh recommendations)
@@ -241,7 +242,8 @@ function MarketplaceHome() {
         coverImageUrl: imageMap.get(r.id) ?? null,
       }));
     },
-    refetchInterval: 10000,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
   });
 
   const { data: rentalRecs = [], isLoading: loadingRentals } = useQuery({
@@ -389,7 +391,8 @@ function MarketplaceHome() {
         coverImageUrl: imageMap.get(r.id) ?? null,
       }));
     },
-    refetchInterval: 10000,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
   });
 
   const filtered = useMemo(() => {

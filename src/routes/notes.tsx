@@ -238,7 +238,8 @@ function NotesHubPage() {
         seller: sellerMap.get(r.seller_id),
       }));
     },
-    refetchInterval: 5000,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
   });
 
   const { data: requests, isLoading: loadingRequests } = useQuery({
@@ -294,7 +295,8 @@ console.log(data, error);
         };
       });
     },
-    refetchInterval: 5000,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
   });
 
   const filteredListings = useMemo(() => {

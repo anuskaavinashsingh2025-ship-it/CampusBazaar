@@ -74,6 +74,8 @@ function WishlistPage() {
     queryKey: ["wishlist_resolved", user?.id, wishlistRows.map((r) => r.id).join(",")],
     queryFn: () => resolveWishlistItems(wishlistRows),
     enabled: wishlistRows.length > 0,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
   });
 
   const filtered = useMemo(() => {

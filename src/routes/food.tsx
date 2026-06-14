@@ -156,7 +156,8 @@ function FoodHubPage() {
         seller: sellerMap.get(r.seller_id),
       }));
     },
-    refetchInterval: 10000,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
   });
 
   const { data: requests, isLoading: loadingRequests } = useQuery({
@@ -212,7 +213,8 @@ console.log("FOOD REQUESTS ERROR", error);
         };
       });
     },
-    refetchInterval: 10000,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
   });
 
   const filteredListings = useMemo(() => {
