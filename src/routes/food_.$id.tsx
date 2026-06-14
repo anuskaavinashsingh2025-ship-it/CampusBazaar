@@ -88,7 +88,7 @@ function FoodDetailsPage() {
           "id,product_name,brand_name,category,quantity,price,description,expiry_date,status,seller_id,created_at,views_count,wishlist_count",
         )
         .eq("id", id)
-        .eq("status", "available")
+       
         .maybeSingle();
       if (error) throw error;
       return (data ?? null) as unknown as FoodListingRow | null;

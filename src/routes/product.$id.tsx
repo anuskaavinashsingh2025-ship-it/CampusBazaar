@@ -99,7 +99,6 @@ function ProductDetailsPage() {
           "id,title,description,category,custom_category,price,condition,urgent_sale,is_negotiable,location,status,seller_id,created_at,views_count,wishlist_count",
         )
         .eq("id", id)
-        .eq("status", "available")
         .maybeSingle();
       if (error) throw error;
       return (data ?? null) as unknown as ProductListingRow | null;
