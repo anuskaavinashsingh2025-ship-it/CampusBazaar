@@ -258,7 +258,7 @@ export function useRespondToFoodRequest() {
       try {
         const { error: reqStatusErr } = await supabase
           .from(FOOD_REQUESTS_TABLE)
-          .update({ status: "in_progress" })
+          .update({ status: "fulfilled" })
           .eq("id", input.requestId);
         if (reqStatusErr) {
           console.warn("[FOOD REQUEST] Could not update request status (non-fatal)", reqStatusErr);

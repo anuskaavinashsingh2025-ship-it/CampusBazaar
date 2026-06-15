@@ -982,30 +982,32 @@ if (rentalError) {
 }
 }
 if (conversation.context_type === "food") {
- const { error: foodOrderError } = await supabase
-  .from("food_orders")
-  .update({ status: "completed" })
-  .eq("id", conversation.request_id);
+  // Update food_orders using request_id (for food listing chats)
+  if (conversation.request_id) {
+    const { error: foodOrderError } = await supabase
+      .from("food_orders")
+      .update({ status: "completed" })
+      .eq("id", conversation.request_id);
+    if (foodOrderError) console.error("Food order update failed", foodOrderError);
+  }
 
-if (foodOrderError) {
-  console.error("Food order update failed", foodOrderError);
-}
+  // Try to mark food_listings as sold using context_id
+  // (only works for food listing chats, silently ignored for food request chats)
+  const { error: foodListingError } = await supabase
+    .from("food_listings")
+    .update({ status: "sold" })
+    .eq("id", conversation.context_id);
+  if (foodListingError) console.error("Food listing update failed", foodListingError);
 
- const { error: foodError } = await supabase
-  .from("food_listings")
-  .update({ status: "sold" })
-  .eq("id", conversation.context_id);
-
-if (foodError) {
-  console.error("Food update failed", foodError);
-}
+  // Try to mark food_requests as fulfilled using context_id
+  // (only works for food request chats where context_id = food_requests.id)
+  const { error: foodRequestError } = await supabase
+    .from("food_requests")
+    .update({ status: "fulfilled" })
+    .eq("id", conversation.context_id);
+  if (foodRequestError) console.error("Food request update failed", foodRequestError);
 }
 if (conversation.context_type === "notes") {
-  // Determine whether this listing is a sale ("sell") or a rental ("rent").
-  // Note: conversation.request_id always points to a row in
-  // notes_purchase_requests (both purchases and rentals are created there),
-  // so checking the unrelated notes_requests table here was always a no-op
-  // and every notes conversation fell into the "purchase" branch below.
   const { data: notesListing } = await supabase
     .from("notes_listings")
     .select("listing_type")
@@ -1014,40 +1016,38 @@ if (conversation.context_type === "notes") {
 
   const listingType = (notesListing as { listing_type?: "sell" | "rent" } | null)?.listing_type;
 
-  // Mark the underlying purchase/rental request as completed either way.
   const { error: notesRequestError } = await supabase
     .from("notes_purchase_requests")
     .update({ status: "completed" })
     .eq("id", conversation.request_id);
+  if (notesRequestError) console.error("Notes request update failed", notesRequestError);
 
-  if (notesRequestError) {
-    console.error("Notes request update failed", notesRequestError);
-  }
+  // ← ADD THIS: mark notes_requests as fulfilled so it disappears from marketplace
+  const { error: notesMarketRequestError } = await supabase
+    .from("notes_requests")
+    .update({ status: "fulfilled" })
+    .eq("id", conversation.context_id);
+  if (notesMarketRequestError) console.error("Notes market request update failed", notesMarketRequestError);
 
-  if (listingType === "rent") {
-    // This is a notes rental. The listing's availability (available vs
-    // unavailable) is decided by the seller via the dedicated "Confirm
-    // Return" flow (useUpdateNotesRental's listingStatus modal), so don't
-    // override it here.
-  } else {
-    // This is a notes purchase - the listing is gone for good.
+  if (listingType !== "rent") {
     const { error: notesError } = await supabase
       .from("notes_listings")
       .update({ status: "unavailable" })
       .eq("id", conversation.context_id);
-
-    if (notesError) {
-      console.error("Notes update failed", notesError);
-    }
+    if (notesError) console.error("Notes update failed", notesError);
   }
 }
      
       console.log("Completed conversation:", conversation);
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: conversationsQueryKey(userId ?? null) });
-      toast.success("Transaction completed");
-    },
+  void queryClient.invalidateQueries({ queryKey: conversationsQueryKey(userId ?? null) });
+  void queryClient.invalidateQueries({ queryKey: ["notes_listing"] });
+  void queryClient.invalidateQueries({ queryKey: ["notes", "listings"] });
+  void queryClient.invalidateQueries({ queryKey: ["marketplace_home", "recommendations", "notes"] });
+  void queryClient.invalidateQueries({ queryKey: ["notes_purchases"] });
+  toast.success("Transaction completed");
+},
   });
 }
 

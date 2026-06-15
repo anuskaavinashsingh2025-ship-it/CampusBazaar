@@ -762,8 +762,20 @@ function AllRequestsTab({
         );
       }
       if (role === "seller" && req.status === "accepted") {
-        return <Button className="w-full" onClick={() => handleNotesPurchaseComplete(req)}>Mark Completed</Button>;
-      }
+  return (
+    <Button
+      variant="outline"
+      className="w-full"
+      onClick={() => {
+        if (req.rawData.conversation_id) {
+          window.open(`/chats/${req.rawData.conversation_id}`, "_self");
+        }
+      }}
+    >
+      Complete via Chat
+    </Button>
+  );
+}
       if (req.status === "pending") {
         return <Button variant="outline" className="w-full" onClick={() => handleNotesPurchaseCancel(req)}>Cancel</Button>;
       }
@@ -2493,22 +2505,15 @@ function NotesRequestsTab({
                 }
                 actions={
                   <>
-                    {role === "seller" && req.status === "accepted" && (
-                      <Button
-                        className="w-full"
-                        onClick={() =>
-                          actPurchase(
-                            req,
-                            "completed",
-                            "Deal Completed",
-                            "Your notes purchase is complete.",
-                            req.buyer_id,
-                          )
-                        }
-                      >
-                        Mark Completed
-                      </Button>
-                    )}
+                  {role === "seller" && req.status === "accepted" && req.conversation_id && (
+  <Button
+    className="w-full"
+    variant="outline"
+    onClick={() => window.open(`/chats/${req.conversation_id}`, "_self")}
+  >
+    Complete via Chat
+  </Button>
+)}          
                   </>
                 }
               />
@@ -2595,22 +2600,15 @@ function NotesRequestsTab({
                         </Button>
                       </div>
                     )}
-                    {role === "seller" && req.status === "accepted" && (
-                      <Button
-                        className="w-full"
-                        onClick={() =>
-                          actPurchase(
-                            req,
-                            "completed",
-                            "Deal Completed",
-                            "Your notes purchase is complete.",
-                            req.buyer_id,
-                          )
-                        }
-                      >
-                        Mark Completed
-                      </Button>
-                    )}
+                   {role === "seller" && req.status === "accepted" && req.conversation_id && (
+  <Button
+    className="w-full"
+    variant="outline"
+    onClick={() => window.open(`/chats/${req.conversation_id}`, "_self")}
+  >
+    Complete via Chat
+  </Button>
+)}
                     {req.status === "pending" && (
                       <Button
                         variant="outline"

@@ -138,26 +138,39 @@ function ChatThreadPage() {
   }, [conversation]);
 
   useEffect(() => {
-    const checkNotesType = async () => {
-      if (!conversation || conversation.context_type !== "notes" || !conversation.request_id) {
-        setIsNotesRental(false);
-        return;
-      }
-      try {
-        // Check if the request_id belongs to notes_requests (rental) or notes_purchase_requests (purchase)
-        const { data: rentalRequest } = await supabase
-          .from("notes_requests")
-          .select("id")
-          .eq("id", conversation.request_id)
+  const checkNotesType = async () => {
+    if (!conversation || conversation.context_type !== "notes" || !conversation.request_id) {
+      setIsNotesRental(false);
+      return;
+    }
+    try {
+      // Check notes_purchase_requests for rental type listing
+      const { data: purchaseRequest } = await supabase
+        .from("notes_purchase_requests")
+        .select("id, notes_listing_id")
+        .eq("id", conversation.request_id)
+        .maybeSingle();
+
+      if (purchaseRequest) {
+        // Check if the underlying listing is a rental type
+        const { data: listing } = await supabase
+          .from("notes_listings")
+          .select("listing_type")
+          .eq("id", (purchaseRequest as { notes_listing_id: string }).notes_listing_id)
           .maybeSingle();
-        setIsNotesRental(!!rentalRequest);
-      } catch (err) {
-        console.error("Failed to check notes type:", err);
+        const isRentalListing = (listing as { listing_type?: string } | null)?.listing_type === "rent";
+        setIsNotesRental(isRentalListing);
+      } else {
+        // It's a notes_request (marketplace "I need notes" post) — treat as purchase flow
         setIsNotesRental(false);
       }
-    };
-    void checkNotesType();
-  }, [conversation]);
+    } catch (err) {
+      console.error("Failed to check notes type:", err);
+      setIsNotesRental(false);
+    }
+  };
+  void checkNotesType();
+}, [conversation]);
 
   if (loadingConv || loadingMsgs) {
     return (
@@ -318,18 +331,18 @@ function ChatThreadPage() {
             </>
           )}
           {/* Two-party completion for product, food, and notes purchase chats */}
-          {conversation.status === "active" && !isNotesRental && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="gap-1 text-xs"
-              onClick={() => requestCompletion.mutate(conversation.id)}
-              disabled={requestCompletion.isPending}
-            >
-              {requestCompletion.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-              Complete
-            </Button>
-          )}
+{conversation.status === "active" && !isRental && !(isNotes && isNotesRental) && (
+  <Button
+    variant="ghost"
+    size="sm"
+    className="gap-1 text-xs"
+    onClick={() => requestCompletion.mutate(conversation.id)}
+    disabled={requestCompletion.isPending}
+  >
+    {requestCompletion.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+    Complete
+  </Button>
+)}
           {/* Withdraw completion request — only visible to initiator */}
           {isCompletionPending && isCompletionRequester && (
             <Button

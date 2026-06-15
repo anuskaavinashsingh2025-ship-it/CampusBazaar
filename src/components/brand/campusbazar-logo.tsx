@@ -145,9 +145,9 @@ export function CampusBazarLogo({
           // object-contain keeps the cart icon fully visible.
           // No cropping, no stretching, preserves aspect ratio.
           className={cn(
-            "select-none object-contain pointer-events-none",
-            image,
-          )}
+  "select-none object-cover scale-[1.8] pointer-events-none",
+  image,
+)}
         />
       </span>
       {showText && (
@@ -190,7 +190,7 @@ export function CampusBazarIcon({
         src="/images/logo.jpeg"
         alt=""
         draggable={false}
-        className={cn("select-none object-contain pointer-events-none", image)}
+        className={cn("select-none object-cover scale-[1.8] pointer-events-none", image)}
       />
     </span>
   );
