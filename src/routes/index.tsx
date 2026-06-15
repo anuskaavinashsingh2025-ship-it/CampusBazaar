@@ -34,6 +34,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Separator } from "@/components/ui/separator";
+import { RentalCard, type RentalCardModel } from "@/components/marketplace/rental-card";
 import {
   Dialog,
   DialogContent,
@@ -638,7 +639,7 @@ function MarketplaceHome() {
                 <div className="col-span-full py-8 text-center text-sm text-muted-foreground">Loading…</div>
               ) : (
                 (foodRecs as unknown as ProductCardModel[]).slice(0, HOME_PREVIEW_LIMIT).map((p) => (
-                  <ProductCard key={p.id} product={p} />
+                  <ProductCard key={p.id} product={p} linkTo={`/food/${p.id}`} />
                 ))
               )}
             </div>
@@ -648,7 +649,7 @@ function MarketplaceHome() {
                   <Link to="/food">View all food listings</Link>
                 </Button>
               </div>
-            )}
+            )}    
           </div>
         )}
 
@@ -665,8 +666,8 @@ function MarketplaceHome() {
               {loadingRentals ? (
                 <div className="col-span-full py-8 text-center text-sm text-muted-foreground">Loading…</div>
               ) : (
-                (rentalRecs as unknown as ProductCardModel[]).slice(0, HOME_PREVIEW_LIMIT).map((p) => (
-                  <ProductCard key={p.id} product={p} />
+                (rentalRecs as unknown as RentalCardModel[]).slice(0, HOME_PREVIEW_LIMIT).map((p) => (
+  <RentalCard key={p.id} rental={p} />
                 ))
               )}
             </div>
@@ -694,7 +695,7 @@ function MarketplaceHome() {
                 <div className="col-span-full py-8 text-center text-sm text-muted-foreground">Loading…</div>
               ) : (
                 (notesRecs as unknown as ProductCardModel[]).slice(0, HOME_PREVIEW_LIMIT).map((p) => (
-                  <ProductCard key={p.id} product={p} />
+                  <ProductCard key={p.id} product={p} linkTo={`/notes/${p.id}`} />
                 ))
               )}
             </div>

@@ -32,9 +32,11 @@ function formatInr(amount: number) {
 export function ProductCard({
   product,
   onDeleted,
+  linkTo,
 }: {
   product: ProductCardModel;
   onDeleted?: (id: string) => void;
+  linkTo?: string;
 }) {
   const navigate = useNavigate();
   const ownerId =
@@ -70,7 +72,7 @@ export function ProductCard({
               onDeleted={() => onDeleted?.(product.id)}
             />
           </div>
-          <Link to="/product/$id" params={{ id: product.id }} className="block">
+          <Link to={(linkTo ?? `/product/${product.id}`) as any} className="block">
             {product.coverImageUrl ? (
               <img
                 src={product.coverImageUrl}
@@ -97,8 +99,7 @@ export function ProductCard({
         <div className="space-y-2 p-3">
           <div className="text-sm font-semibold text-foreground">{formatInr(product.price)}</div>
           <Link
-            to="/product/$id"
-            params={{ id: product.id }}
+            to={(linkTo ?? `/product/${product.id}`) as any}
             className="line-clamp-2 block text-sm font-medium leading-snug text-foreground hover:underline"
           >
             {product.title}
