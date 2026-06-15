@@ -695,7 +695,7 @@ function MarketplaceHome() {
                 <div className="col-span-full py-8 text-center text-sm text-muted-foreground">Loading…</div>
               ) : (
                 (notesRecs as unknown as ProductCardModel[]).slice(0, HOME_PREVIEW_LIMIT).map((p) => (
-                  <ProductCard key={p.id} product={p} linkTo={`/notes/${p.id}`} />
+                  <ProductCard key={p.id} product={p} linkTo={`/notes/${p.id}`} itemType="notes" />
                 ))
               )}
             </div>

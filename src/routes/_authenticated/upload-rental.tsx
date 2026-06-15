@@ -98,11 +98,13 @@ function UploadRentalPage() {
   const [images, setImages] = useState<File[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   // support editing an existing rental via ?edit=<id>
   useEffect(() => {
     const search = new URLSearchParams(window.location.search);
     const editId = search.get("edit");
+    setEditingId(editId);
     if (!editId) return;
     let cancelled = false;
     void (async () => {
@@ -146,13 +148,12 @@ function UploadRentalPage() {
   }
 
   const canSubmit =
-    title.trim().length > 0 &&
-    description.trim().length > 0 &&
-    (category !== "Others" || customCategory.trim().length > 0) &&
-    rentPrice.trim().length > 0 &&
-    Number(rentPrice) > 0 &&
-    images.length >= 1 &&
-    images.length <= 5;
+  title.trim().length > 0 &&
+  description.trim().length > 0 &&
+  (category !== "Others" || customCategory.trim().length > 0) &&
+  rentPrice.trim().length > 0 &&
+  Number(rentPrice) > 0 &&
+  (editingId ? images.length <= 5 : images.length >= 1 && images.length <= 5);    
 
   const handleFiles = (fileList: FileList | null) => {
     if (!fileList) return;
@@ -160,21 +161,38 @@ function UploadRentalPage() {
   };
 
   const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!canSubmit) {
-      toast.error("Please fill all required fields (and upload 1–5 images).");
-      return;
-    }
+  e.preventDefault();
+  if (!canSubmit) {
+    toast.error("Please fill all required fields (and upload 1–5 images).");
+    return;
+  }
 
-    setSubmitting(true);
-    try {
-      await enforceBanCheck(user.id, "create a rental listing");
-      await ensureSellerProfile({
-        user_id: user.id,
-        display_name: sellerDisplayName,
-        avatar_url: profile?.avatar_url ?? null,
-      });
+  setSubmitting(true);
+  try {
+    await enforceBanCheck(user.id, "create a rental listing");
+    await ensureSellerProfile({
+      user_id: user.id,
+      display_name: sellerDisplayName,
+      avatar_url: profile?.avatar_url ?? null,
+    });
 
+    let rentalId: string;
+
+    if (editingId) {
+      const { error: updateErr } = await supabase
+        .from(RENTAL_LISTINGS_TABLE)
+        .update({
+          title: title.trim(),
+          description: description.trim(),
+          category,
+          custom_category: category === "Others" ? customCategory.trim() : null,
+          rent_price_per_day: Number(rentPrice),
+          condition,
+        })
+        .eq("id", editingId);
+      if (updateErr) throw updateErr;
+      rentalId = editingId;
+    } else {
       const { data: inserted, error: insertErr } = await supabase
         .from(RENTAL_LISTINGS_TABLE)
         .insert({
@@ -189,26 +207,37 @@ function UploadRentalPage() {
         })
         .select("id")
         .single();
-
       if (insertErr) throw insertErr;
+      rentalId = inserted.id as string;
+    }
 
-      const rentalId = inserted.id as string;
-      const bucket = "rental-images";
+    const bucket = "rental-images";
 
-      console.log("[Rental Upload] Uploading images:", { count: images.length, rentalId });
-      const uploadedPaths: string[] = [];
+    // Only touch images if the user picked new ones
+    if (images.length > 0) {
+      if (editingId) {
+        // remove old images first
+        const { data: oldImages } = await supabase
+          .from(RENTAL_IMAGES_TABLE)
+          .select("storage_path")
+          .eq("rental_id", rentalId);
+
+        if (oldImages?.length) {
+          await supabase.storage
+            .from(bucket)
+            .remove(oldImages.map((row: any) => row.storage_path));
+          await supabase.from(RENTAL_IMAGES_TABLE).delete().eq("rental_id", rentalId);
+        }
+      }
 
       for (let i = 0; i < images.length; i++) {
         const file = images[i];
         const objectName = `${rentalId}/${i}-${file.name.replaceAll("/", "-")}`;
-        console.log(`[Rental Upload] Uploading image ${i + 1}/${images.length}:`, objectName);
 
-        const { error: uploadErr } = await supabase.storage.from(bucket).upload(objectName, file, {
-          upsert: false,
-          contentType: file.type,
-        });
+        const { error: uploadErr } = await supabase.storage
+          .from(bucket)
+          .upload(objectName, file, { upsert: false, contentType: file.type });
         if (uploadErr) throw uploadErr;
-        uploadedPaths.push(objectName);
 
         const { error: imageErr } = await supabase.from(RENTAL_IMAGES_TABLE).insert({
           rental_id: rentalId,
@@ -216,20 +245,19 @@ function UploadRentalPage() {
           sort_index: i,
         } satisfies RentalImagesInsertable);
         if (imageErr) throw imageErr;
-        console.log(`[Rental Upload] Inserted image row ${i + 1}/${images.length}:`, { storage_path: objectName, sort_index: i });
       }
-
-      console.log("[Rental Upload] All images uploaded successfully:", uploadedPaths);
-
-      await queryClient.invalidateQueries({ queryKey: ["rentals"] });
-      toast.success("Rental uploaded!");
-      navigate({ to: "/rent/$id", params: { id: rentalId } });
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not upload rental");
-    } finally {
-      setSubmitting(false);
     }
-  };
+
+    await queryClient.invalidateQueries({ queryKey: ["rentals"] });
+    toast.success(editingId ? "Rental updated!" : "Rental uploaded!");
+    navigate({ to: "/rent/$id", params: { id: rentalId } });
+  } catch (err) {
+    toast.error(err instanceof Error ? err.message : "Could not upload rental");
+  } finally {
+    setSubmitting(false);
+  }
+};
+
 
   return (
     <div className="min-h-screen bg-background pb-24">

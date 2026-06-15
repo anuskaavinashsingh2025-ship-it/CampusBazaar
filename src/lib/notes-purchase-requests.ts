@@ -279,6 +279,22 @@ export function useUpdateNotesPurchase() {
               contextType: "notes",
               contextId: row.notes_listing_id,
             });
+
+            // Mark the notes listing as unavailable so it no longer shows
+            // up as available in the marketplace. Note: notes_status enum
+            // is ('available' | 'rented_out' | 'unavailable' | 'hidden') -
+            // there is no 'sold' value, so 'unavailable' is the correct
+            // terminal state for a completed purchase.
+            const { error: notesListingError } = await supabase
+              .from(NOTES_LISTINGS_TABLE)
+              .update({ status: "unavailable" })
+              .eq("id", row.notes_listing_id);
+            if (notesListingError) {
+              console.error(
+                "[useUpdateNotesPurchase] Failed to mark notes listing as unavailable:",
+                notesListingError,
+              );
+            }
           } else {
             conversationId = await getOrCreateConversation({
               buyerId: row.buyer_id,
@@ -340,6 +356,7 @@ export function useUpdateNotesPurchase() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["notes_purchases"] });
       void queryClient.invalidateQueries({ queryKey: ["notes_listing"] });
+      void queryClient.invalidateQueries({ queryKey: ["notes", "listings"] });
       invalidateChatQueries(queryClient);
     },
     onError: (err) => {

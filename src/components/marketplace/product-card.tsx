@@ -33,10 +33,12 @@ export function ProductCard({
   product,
   onDeleted,
   linkTo,
+  itemType = "product",
 }: {
   product: ProductCardModel;
   onDeleted?: (id: string) => void;
   linkTo?: string;
+  itemType?: "product" | "rental" | "food" | "notes";
 }) {
   const navigate = useNavigate();
   const ownerId =
@@ -62,7 +64,7 @@ export function ProductCard({
           >
             {/* Robust ownerId resolution: some callers may not populate seller.user_id consistently */}
             <ListingActions
-              itemType="product"
+              itemType={itemType}
               itemId={product.id}
               ownerId={ownerId}
               onEdit={() => {

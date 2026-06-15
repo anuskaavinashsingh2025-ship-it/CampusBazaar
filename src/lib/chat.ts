@@ -1001,46 +1001,39 @@ if (foodError) {
 }
 }
 if (conversation.context_type === "notes") {
-  // Check if this is a notes rental or notes purchase
-  const { data: rentalRequest } = await supabase
-    .from("notes_requests")
-    .select("id")
-    .eq("id", conversation.request_id)
+  // Determine whether this listing is a sale ("sell") or a rental ("rent").
+  // Note: conversation.request_id always points to a row in
+  // notes_purchase_requests (both purchases and rentals are created there),
+  // so checking the unrelated notes_requests table here was always a no-op
+  // and every notes conversation fell into the "purchase" branch below.
+  const { data: notesListing } = await supabase
+    .from("notes_listings")
+    .select("listing_type")
+    .eq("id", conversation.context_id)
     .maybeSingle();
 
-  if (rentalRequest) {
-    // This is a notes rental - update notes_requests and notes_listings to rented_out
-    const { error: notesRentalError } = await supabase
-      .from("notes_requests")
-      .update({ status: "completed" })
-      .eq("id", conversation.request_id);
+  const listingType = (notesListing as { listing_type?: "sell" | "rent" } | null)?.listing_type;
 
-    if (notesRentalError) {
-      console.error("Notes rental request update failed", notesRentalError);
-    }
+  // Mark the underlying purchase/rental request as completed either way.
+  const { error: notesRequestError } = await supabase
+    .from("notes_purchase_requests")
+    .update({ status: "completed" })
+    .eq("id", conversation.request_id);
 
-    const { error: notesRentalListingError } = await supabase
-      .from("notes_listings")
-      .update({ status: "rented_out" })
-      .eq("id", conversation.context_id);
+  if (notesRequestError) {
+    console.error("Notes request update failed", notesRequestError);
+  }
 
-    if (notesRentalListingError) {
-      console.error("Notes rental listing update failed", notesRentalListingError);
-    }
+  if (listingType === "rent") {
+    // This is a notes rental. The listing's availability (available vs
+    // unavailable) is decided by the seller via the dedicated "Confirm
+    // Return" flow (useUpdateNotesRental's listingStatus modal), so don't
+    // override it here.
   } else {
-    // This is a notes purchase - update notes_purchase_requests and notes_listings to sold
-    const { error: notesPurchaseError } = await supabase
-      .from("notes_purchase_requests")
-      .update({ status: "completed" })
-      .eq("id", conversation.request_id);
-
-    if (notesPurchaseError) {
-      console.error("Notes purchase request update failed", notesPurchaseError);
-    }
-
+    // This is a notes purchase - the listing is gone for good.
     const { error: notesError } = await supabase
       .from("notes_listings")
-      .update({ status: "sold" })
+      .update({ status: "unavailable" })
       .eq("id", conversation.context_id);
 
     if (notesError) {
