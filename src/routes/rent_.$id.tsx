@@ -118,6 +118,7 @@ function RentDetailsPage() {
   const { data: rental, isLoading } = useQuery({
     queryKey: ["rental", id],
     queryFn: async () => {
+      console.log("[RentalDetail] Fetching rental with ID:", id);
       const { data, error } = await supabase
         .from(RENTAL_LISTINGS_TABLE)
         .select(
@@ -125,6 +126,7 @@ function RentDetailsPage() {
         )
         .eq("id", id)
         .maybeSingle();
+      console.log("[RentalDetail] Query result:", { data, error });
       if (error) throw error;
       return (data ?? null) as unknown as RentalRow | null;
     },

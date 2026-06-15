@@ -93,6 +93,7 @@ function ProductDetailsPage() {
   const { data: product, isLoading } = useQuery({
     queryKey: ["product", id],
     queryFn: async () => {
+      console.log("[ProductDetail] Fetching product with ID:", id);
       const { data, error } = await supabase
         .from(PRODUCT_LISTINGS_TABLE)
         .select(
@@ -101,6 +102,7 @@ function ProductDetailsPage() {
         .eq("id", id)
         .eq("status", "available")
         .maybeSingle();
+      console.log("[ProductDetail] Query result:", { data, error });
       if (error) throw error;
       return (data ?? null) as unknown as ProductListingRow | null;
     },

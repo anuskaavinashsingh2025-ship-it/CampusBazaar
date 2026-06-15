@@ -99,6 +99,7 @@ function NotesDetailsPage() {
   const { data: listing, isLoading } = useQuery({
     queryKey: ["notes_listing", id],
     queryFn: async () => {
+      console.log("[NotesDetail] Fetching notes listing with ID:", id);
       const { data, error } = await supabase
         .from(NOTES_LISTINGS_TABLE)
         .select(
@@ -106,6 +107,7 @@ function NotesDetailsPage() {
         )
         .eq("id", id)
         .maybeSingle();
+      console.log("[NotesDetail] Query result:", { data, error });
       if (error) throw error;
       return (data ?? null) as unknown as NotesListingRow | null;
     },

@@ -82,14 +82,15 @@ function FoodDetailsPage() {
   const { data: listing, isLoading } = useQuery({
     queryKey: ["food", id],
     queryFn: async () => {
+      console.log("[FoodDetail] Fetching food listing with ID:", id);
       const { data, error } = await supabase
         .from(FOOD_LISTINGS_TABLE)
         .select(
           "id,product_name,brand_name,category,quantity,price,description,expiry_date,status,seller_id,created_at,views_count,wishlist_count",
         )
         .eq("id", id)
-        .eq("status", "available")
         .maybeSingle();
+      console.log("[FoodDetail] Query result:", { data, error });
       if (error) throw error;
       return (data ?? null) as unknown as FoodListingRow | null;
     },
