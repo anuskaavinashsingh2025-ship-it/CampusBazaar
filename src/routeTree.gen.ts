@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as TourRouteImport } from './routes/tour'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as NotesRouteImport } from './routes/notes'
@@ -46,6 +47,11 @@ import { Route as AuthenticatedChatsIdRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedAdminReportsRouteImport } from './routes/_authenticated/admin.reports'
 import { Route as AuthenticatedAdminFeedbackRouteImport } from './routes/_authenticated/admin.feedback'
 
+const TourRoute = TourRouteImport.update({
+  id: '/tour',
+  path: '/tour',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TermsRoute = TermsRouteImport.update({
   id: '/terms',
   path: '/terms',
@@ -248,6 +254,7 @@ export interface FileRoutesByFullPath {
   '/notes': typeof NotesRoute
   '/reset-password': typeof ResetPasswordRoute
   '/terms': typeof TermsRoute
+  '/tour': typeof TourRoute
   '/admin': typeof AuthenticatedAdminRouteWithChildren
   '/chats': typeof AuthenticatedChatsRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
@@ -285,6 +292,7 @@ export interface FileRoutesByTo {
   '/notes': typeof NotesRoute
   '/reset-password': typeof ResetPasswordRoute
   '/terms': typeof TermsRoute
+  '/tour': typeof TourRoute
   '/admin': typeof AuthenticatedAdminRouteWithChildren
   '/chats': typeof AuthenticatedChatsRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
@@ -324,6 +332,7 @@ export interface FileRoutesById {
   '/notes': typeof NotesRoute
   '/reset-password': typeof ResetPasswordRoute
   '/terms': typeof TermsRoute
+  '/tour': typeof TourRoute
   '/_authenticated/admin': typeof AuthenticatedAdminRouteWithChildren
   '/_authenticated/chats': typeof AuthenticatedChatsRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
@@ -363,6 +372,7 @@ export interface FileRouteTypes {
     | '/notes'
     | '/reset-password'
     | '/terms'
+    | '/tour'
     | '/admin'
     | '/chats'
     | '/dashboard'
@@ -400,6 +410,7 @@ export interface FileRouteTypes {
     | '/notes'
     | '/reset-password'
     | '/terms'
+    | '/tour'
     | '/admin'
     | '/chats'
     | '/dashboard'
@@ -438,6 +449,7 @@ export interface FileRouteTypes {
     | '/notes'
     | '/reset-password'
     | '/terms'
+    | '/tour'
     | '/_authenticated/admin'
     | '/_authenticated/chats'
     | '/_authenticated/dashboard'
@@ -477,6 +489,7 @@ export interface RootRouteChildren {
   NotesRoute: typeof NotesRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   TermsRoute: typeof TermsRoute
+  TourRoute: typeof TourRoute
   FoodIdRoute: typeof FoodIdRoute
   NotesIdRoute: typeof NotesIdRoute
   ProductIdRoute: typeof ProductIdRoute
@@ -487,6 +500,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/tour': {
+      id: '/tour'
+      path: '/tour'
+      fullPath: '/tour'
+      preLoaderRoute: typeof TourRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/terms': {
       id: '/terms'
       path: '/terms'
@@ -812,6 +832,7 @@ const rootRouteChildren: RootRouteChildren = {
   NotesRoute: NotesRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   TermsRoute: TermsRoute,
+  TourRoute: TourRoute,
   FoodIdRoute: FoodIdRoute,
   NotesIdRoute: NotesIdRoute,
   ProductIdRoute: ProductIdRoute,

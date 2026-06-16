@@ -15,6 +15,7 @@ import {
   User,
   UtensilsCrossed,
   MessageCircle,
+  Map,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 
@@ -38,6 +39,7 @@ import { useAuth } from "@/lib/auth";
 import { useUnreadChatCount } from "@/lib/chat";
 import { useNotificationRealtime, useUnreadNotificationCount } from "@/lib/notifications";
 import { supabase } from "@/integrations/supabase/client";
+
 
 const mainItems = [
   { title: "Home", url: "/", icon: Home, external: true },
@@ -222,6 +224,15 @@ export function AppSidebar() {
 
       <SidebarFooter>
         <SidebarMenu>
+          <SidebarMenuItem>
+  <SidebarMenuButton
+    isActive={pathname === "/tour"}
+    onClick={() => handleNavigation("/tour")}
+  >
+    <Map className="h-4 w-4" />
+    <span>Tour Guide</span>
+  </SidebarMenuButton>
+</SidebarMenuItem>
           <SidebarMenuItem>
             <SidebarMenuButton
               isActive={pathname === "/feedback"}
