@@ -147,13 +147,13 @@ function WishlistPage() {
           <h1 className="text-2xl font-bold tracking-tight">
             Wishlist <span className="text-red-500">❤</span>
           </h1>
-          <p className="mt-1 text-sm text-muted-foreground">Saved items: {wishlistRows.length}</p>
+          <p className="mt-1 text-sm text-muted-foreground">Saved items: {resolvedItems.length}</p>
         </div>
         <Card className="border-primary/20 bg-primary/5 shadow-none">
           <CardContent className="flex items-center gap-3 p-4">
             <Heart className="h-8 w-8 fill-red-500 text-red-500" />
             <div>
-              <div className="text-2xl font-bold">{wishlistRows.length}</div>
+              <div className="text-2xl font-bold">{resolvedItems.length}</div>
               <div className="text-xs text-muted-foreground">Total saved</div>
             </div>
           </CardContent>
@@ -191,7 +191,7 @@ function WishlistPage() {
         </div>
 
         <TabsContent value={tab} className="mt-4 space-y-3">
-          {resolving && wishlistRows.length > 0 ? (
+          {resolving && resolvedItems.length > 0 ? (
             <div className="flex justify-center py-16">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>

@@ -1,5 +1,5 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { createFileRoute, Link, useNavigate, useSearch } from "@tanstack/react-router";
+import { useMemo, useState, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
@@ -95,6 +95,8 @@ const CATEGORY_OPTIONS = [
 
 function NotesHubPage() {
   const navigate = useNavigate();
+  const search = useSearch({ from: "/notes" });
+  const requestId = (search as any)?.requestId as string | undefined;
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const [query, setQuery] = useState("");
@@ -102,6 +104,25 @@ function NotesHubPage() {
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [visibleCount, setVisibleCount] = useState(12);
   const [requestTab, setRequestTab] = useState<"open" | "my">("open");
+
+  // Handle requestId param - switch to requests tab and scroll to/highlight the request
+  useEffect(() => {
+    if (requestId) {
+      setTab("requests");
+      setRequestTab("open");
+      // Scroll to and highlight the request card after a short delay to ensure it's rendered
+      setTimeout(() => {
+        const element = document.getElementById(`request-${requestId}`);
+        if (element) {
+          element.scrollIntoView({ behavior: "smooth", block: "center" });
+          element.classList.add("ring-2", "ring-primary", "ring-offset-2");
+          setTimeout(() => {
+            element.classList.remove("ring-2", "ring-primary", "ring-offset-2");
+          }, 3000);
+        }
+      }, 500);
+    }
+  }, [requestId]);
 
   // Notes Request → Chat integration.
   // When a seller clicks "Respond" on a request, this hook:
@@ -729,7 +750,7 @@ console.log(data, error);
                   const badge = urgencyBadge(r.urgency_level);
                   const neededBy = getNeededByChip(r.urgency_level);
                   return (
-                    <Card key={r.id} className="border-border/60 shadow-sm hover:shadow-md transition-shadow">
+                    <Card key={r.id} id={`request-${r.id}`} className="border-border/60 shadow-sm hover:shadow-md transition-shadow">
                       <CardContent className="p-3">
                         {/* Header */}
                         <div className="flex items-center justify-between mb-2">

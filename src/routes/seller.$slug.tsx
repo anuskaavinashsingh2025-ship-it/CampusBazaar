@@ -636,10 +636,10 @@ function SellerPage() {
           .eq("seller_id", seller.user_id)
           .eq("status", "sold"),
         supabase
-          .from("rental_listings" as unknown as keyof Database["public"]["Tables"])
-          .select("id")
-          .eq("seller_id", seller.user_id)
-          .eq("status", "rented_out"),
+  .from("rental_requests" as unknown as keyof Database["public"]["Tables"])
+  .select("id")
+  .eq("seller_id", seller.user_id)
+  .eq("status", "completed"),
         supabase
           .from("reviews" as unknown as keyof Database["public"]["Tables"])
           .select("id,rating")
@@ -839,11 +839,11 @@ function SellerPage() {
                         </span>
                         <span className="flex items-center gap-1 text-muted-foreground">
                           <Package className="h-4 w-4" />
-                          {sellerMetrics?.totalSales ?? seller.total_sold} sold
+                          {sellerMetrics?.totalSales ?? 0} sold
                         </span>
                         <span className="flex items-center gap-1 text-muted-foreground">
                           <Home className="h-4 w-4" />
-                          {sellerMetrics?.rentalsCompleted ?? seller.total_rented_out} rentals
+                          {sellerMetrics?.rentalsCompleted ?? 0} rentals
                         </span>
                         <span className="flex items-center gap-1 text-muted-foreground">
                           <Zap className="h-4 w-4" />
@@ -890,12 +890,9 @@ function SellerPage() {
                 </CardHeader>
                 <CardContent className="grid grid-cols-2 gap-3 text-sm">
                   {[
-                    ["Total sales", sellerMetrics?.totalSales ?? seller.total_sold],
+                    ["Total sales", sellerMetrics?.totalSales ?? 0],
                     ["Active listings", products.length],
-                    [
-                      "Rentals completed",
-                      sellerMetrics?.rentalsCompleted ?? seller.total_rented_out,
-                    ],
+                    ["Rentals completed", sellerMetrics?.rentalsCompleted ?? 0],
                     ["Reviews received", sellerMetrics?.reviewsReceived ?? seller.rating_count],
                     [
                       "Average rating",
@@ -931,8 +928,8 @@ function SellerPage() {
                       color: "bg-emerald-100 text-emerald-800",
                     },
                     {
-                      title: seller.total_sold >= 50 ? "50+ Sales" : "Rising Seller",
-                      sub: "CampusBazar member",
+                      title: sellerMetrics?.totalSales && sellerMetrics.totalSales >= 50 ? "50+ Sales" : "Rising Seller",
+                      sub: "CampusBazaar member",
                       color: "bg-violet-100 text-violet-800",
                     },
                   ].map((b) => (

@@ -425,6 +425,38 @@ function MarketplaceHome() {
     },
   });
 
+  // Fetch recent requests from both food_requests and notes_requests
+  const { data: recentRequests = [], isLoading: loadingRecentRequests } = useQuery({
+    queryKey: ["recent_requests"],
+    queryFn: async () => {
+      const [foodRes, notesRes] = await Promise.all([
+        supabase
+          .from("food_requests")
+          .select("id,product_name,category,description,urgency_level,status,created_at")
+          .eq("status", "open")
+          .order("created_at", { ascending: false })
+          .limit(10),
+        supabase
+          .from("notes_requests")
+          .select("id,subject,request_type,description,urgency_level,status,created_at")
+          .eq("status", "open")
+          .order("created_at", { ascending: false })
+          .limit(10),
+      ]);
+
+      const foodRequests = (foodRes.data ?? []).map((r: any) => ({ ...r, type: "food" as const }));
+      const notesRequests = (notesRes.data ?? []).map((r: any) => ({ ...r, type: "notes" as const }));
+
+      const combined = [...foodRequests, ...notesRequests].sort(
+        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
+
+      return combined.slice(0, 6);
+    },
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+  });
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return products ?? [];
@@ -622,6 +654,73 @@ function MarketplaceHome() {
             <Button variant="outline" size="sm" asChild>
               <Link to="/marketplace">View all {itemsToShow.length} listings</Link>
             </Button>
+          </div>
+        )}
+
+        {/* Recent Requests section */}
+        {!selectedCategory && recentRequests.length > 0 && (
+          <div className="mt-10">
+            <div className="flex items-center justify-between">
+              <div className="text-sm font-semibold">Recent Requests</div>
+              <div className="flex gap-2">
+                <Button variant="ghost" size="sm" asChild>
+                  <Link to="/food">Food Requests</Link>
+                </Button>
+                <Button variant="ghost" size="sm" asChild>
+                  <Link to="/notes">Notes Requests</Link>
+                </Button>
+              </div>
+            </div>
+            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {loadingRecentRequests ? (
+                <div className="col-span-full py-8 text-center text-sm text-muted-foreground">Loading…</div>
+              ) : (
+                recentRequests.map((req: any) => {
+                  const isFood = req.type === "food";
+                  const title = isFood ? req.product_name : req.subject;
+                  const subtitle = isFood ? req.category : req.request_type;
+                  const badgeText = isFood ? "🍔 Food Request" : "📚 Notes Request";
+                  const urgencyBadge = req.urgency_level?.toLowerCase() === "high" 
+                    ? "bg-red-50 text-red-700 border-red-200"
+                    : "bg-yellow-50 text-yellow-700 border-yellow-200";
+                  
+                  const timeAgo = () => {
+                    const h = Math.floor((Date.now() - new Date(req.created_at).getTime()) / (1000 * 60 * 60));
+                    if (h < 1) return "Just now";
+                    if (h < 24) return `${h}h ago`;
+                    return `${Math.floor(h / 24)}d ago`;
+                  };
+
+                  return (
+                    <Card
+                      key={req.id}
+                      className="cursor-pointer hover:border-primary/50 transition-colors"
+                      onClick={() => {
+                        const hubPath = isFood ? "/food" : "/notes";
+                        navigate({ to: hubPath, search: { requestId: req.id } });
+                      }}
+                    >
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between mb-2">
+                          <Badge variant="outline" className="text-xs">
+                            {badgeText}
+                          </Badge>
+                          <Badge variant="outline" className={`text-xs ${urgencyBadge}`}>
+                            {req.urgency_level || "Normal"}
+                          </Badge>
+                        </div>
+                        <div className="font-semibold text-sm mb-1">{title}</div>
+                        <div className="text-xs text-muted-foreground mb-2">{subtitle}</div>
+                        <div className="text-xs text-muted-foreground line-clamp-2 mb-2">
+                          {req.description?.slice(0, 60)}{req.description?.length > 60 ? "..." : ""}
+                        </div>
+                        <div className="text-xs text-muted-foreground">{timeAgo()}</div>
+                      </CardContent>
+                    </Card>
+                  );
+                })
+              )}
+            </div>
           </div>
         )}
 

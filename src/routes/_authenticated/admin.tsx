@@ -414,6 +414,52 @@ function AdminPortalPage() {
     queryClient.invalidateQueries({ queryKey: ["admin"] });
     toast.success("Product removed");
   };
+  const removeRental = async (rentalId: string) => {
+  const { error } = await supabase
+    .from("rental_listings" as never)
+    .delete()
+    .eq("id", rentalId);
+  if (error) {
+    toast.error(error.message);
+    return;
+  }
+  await supabase.from("admin_actions" as never).insert({
+    admin_user_id: user?.id,
+    action_type: "remove_rental",
+    notes: "Removed via admin portal",
+  } as never);
+  queryClient.invalidateQueries({ queryKey: ["admin"] });
+  toast.success("Rental removed");
+};
+const removeFood = async (foodId: string) => {
+  const { error } = await supabase
+    .from("food_listings" as never)
+    .delete()
+    .eq("id", foodId);
+  if (error) { toast.error(error.message); return; }
+  await supabase.from("admin_actions" as never).insert({
+    admin_user_id: user?.id,
+    action_type: "remove_food",
+    notes: "Removed via admin portal",
+  } as never);
+  queryClient.invalidateQueries({ queryKey: ["admin"] });
+  toast.success("Food listing removed");
+};
+
+const removeNotes = async (notesId: string) => {
+  const { error } = await supabase
+    .from("notes_listings" as never)
+    .delete()
+    .eq("id", notesId);
+  if (error) { toast.error(error.message); return; }
+  await supabase.from("admin_actions" as never).insert({
+    admin_user_id: user?.id,
+    action_type: "remove_notes",
+    notes: "Removed via admin portal",
+  } as never);
+  queryClient.invalidateQueries({ queryKey: ["admin"] });
+  toast.success("Notes listing removed");
+};
 
   const setUserStatus = async (
     targetUserId: string,
@@ -825,6 +871,33 @@ function AdminPortalPage() {
                             Remove Product
                           </Button>
                         )}
+                        {r.target_type === "rental" && r.rental_id && (
+  <Button
+    size="sm"
+    variant="destructive"
+    onClick={() => removeRental(r.rental_id!)}
+  >
+    Remove Rental
+  </Button>
+)}
+{r.target_type === "food" && r.food_listing_id && (
+  <Button
+    size="sm"
+    variant="destructive"
+    onClick={() => removeFood(r.food_listing_id!)}
+  >
+    Remove Food Listing
+  </Button>
+)}
+{r.target_type === "notes" && r.notes_listing_id && (
+  <Button
+    size="sm"
+    variant="destructive"
+    onClick={() => removeNotes(r.notes_listing_id!)}
+  >
+    Remove Notes Listing
+  </Button>
+)}
 
                         {r.seller_user_id && (
                           <>

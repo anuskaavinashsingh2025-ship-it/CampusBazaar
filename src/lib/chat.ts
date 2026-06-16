@@ -982,7 +982,7 @@ if (rentalError) {
 }
 }
 if (conversation.context_type === "food") {
-  // Update food_orders using request_id (for food listing chats)
+  // Update food_order status using request_id
   if (conversation.request_id) {
     const { error: foodOrderError } = await supabase
       .from("food_orders")
@@ -991,21 +991,23 @@ if (conversation.context_type === "food") {
     if (foodOrderError) console.error("Food order update failed", foodOrderError);
   }
 
-  // Try to mark food_listings as sold using context_id
-  // (only works for food listing chats, silently ignored for food request chats)
+  // context_id is food_listings.id for listing chats,
+  // food_requests.id for request chats — try both, one will silently no-op
   const { error: foodListingError } = await supabase
     .from("food_listings")
     .update({ status: "sold" })
     .eq("id", conversation.context_id);
   if (foodListingError) console.error("Food listing update failed", foodListingError);
 
-  // Try to mark food_requests as fulfilled using context_id
-  // (only works for food request chats where context_id = food_requests.id)
-  const { error: foodRequestError } = await supabase
-    .from("food_requests")
-    .update({ status: "fulfilled" })
-    .eq("id", conversation.context_id);
-  if (foodRequestError) console.error("Food request update failed", foodRequestError);
+  // Only mark food_request fulfilled if context_id matches a food_request
+  // (i.e. this is a food request chat, not a food listing chat)
+  if (conversation.context_id !== conversation.request_id) {
+    const { error: foodRequestError } = await supabase
+      .from("food_requests")
+      .update({ status: "fulfilled" })
+      .eq("id", conversation.context_id);
+    if (foodRequestError) console.error("Food request update failed", foodRequestError);
+  }
 }
 if (conversation.context_type === "notes") {
   const { data: notesListing } = await supabase
@@ -1046,6 +1048,11 @@ if (conversation.context_type === "notes") {
   void queryClient.invalidateQueries({ queryKey: ["notes", "listings"] });
   void queryClient.invalidateQueries({ queryKey: ["marketplace_home", "recommendations", "notes"] });
   void queryClient.invalidateQueries({ queryKey: ["notes_purchases"] });
+  // Invalidate food queries so listings/requests disappear immediately
+  void queryClient.invalidateQueries({ queryKey: ["food_listings"] });
+  void queryClient.invalidateQueries({ queryKey: ["food"] });
+  void queryClient.invalidateQueries({ queryKey: ["marketplace_home", "recommendations", "food"] });
+  void queryClient.invalidateQueries({ queryKey: ["food_requests"] });
   toast.success("Transaction completed");
 },
   });

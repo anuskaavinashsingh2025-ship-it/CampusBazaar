@@ -191,7 +191,7 @@ function ChatThreadPage() {
     );
   }
 
-  const canSend = conversation.status === "active" || conversation.status === "reported" || conversation.status === "completion_pending";
+  const canSend = conversation.status === "active" || conversation.status === "completion_pending";
   const isCompleted = conversation.status === "completed";
   const isArchived = conversation.status === "archived" || conversation.status === "auto_archived";
   const isAutoArchived = conversation.status === "auto_archived";
@@ -278,7 +278,7 @@ function ChatThreadPage() {
             {rentalStatus.replace(/_/g, " ")}
           </Badge>
         )}
-        <div className="ml-auto flex items-center gap-1">
+        <div className="ml-auto flex items-center gap-1 overflow-x-auto max-w-[70vw] scrollbar-none">
           {isCompleted && (
             <Button
               variant="ghost"

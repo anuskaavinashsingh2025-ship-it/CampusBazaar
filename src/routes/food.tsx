@@ -1,5 +1,5 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { createFileRoute, Link, useNavigate, useSearch } from "@tanstack/react-router";
+import { useMemo, useState, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   ArrowLeft,
@@ -91,6 +91,8 @@ const FOOD_REQUESTS_TABLE = "food_requests" as unknown as keyof Database["public
 
 function FoodHubPage() {
   const navigate = useNavigate();
+  const search = useSearch({ from: "/food" });
+  const requestId = (search as any)?.requestId as string | undefined;
   const { user } = useAuth();
   const respond = useRespondToFoodRequest();
   const { data: buyerFoodOrders = [] } = useBuyerFoodOrders(user?.id);
@@ -99,6 +101,26 @@ function FoodHubPage() {
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   const [visibleCount, setVisibleCount] = useState(12);
   const [requestTab, setRequestTab] = useState<"open" | "my">("open");
+  const highlightedCardRef = useRef<HTMLDivElement>(null);
+
+  // Handle requestId param - switch to requests tab and scroll to/highlight the request
+  useEffect(() => {
+    if (requestId) {
+      setMode("requests");
+      setRequestTab("open");
+      // Scroll to and highlight the request card after a short delay to ensure it's rendered
+      setTimeout(() => {
+        const element = document.getElementById(`request-${requestId}`);
+        if (element) {
+          element.scrollIntoView({ behavior: "smooth", block: "center" });
+          element.classList.add("ring-2", "ring-primary", "ring-offset-2");
+          setTimeout(() => {
+            element.classList.remove("ring-2", "ring-primary", "ring-offset-2");
+          }, 3000);
+        }
+      }, 500);
+    }
+  }, [requestId]);
 
   const { data: listings, isLoading: loadingListings } = useQuery({
     queryKey: ["food", "listings"],
@@ -634,7 +656,7 @@ console.log("FOOD REQUESTS ERROR", error);
                   const badge = urgencyBadge(r.urgency_level);
                   const neededBy = getNeededByChip(r.urgency_level);
                   return (
-                    <Card key={r.id} className="border-border/60 shadow-sm hover:shadow-md transition-shadow">
+                    <Card key={r.id} id={`request-${r.id}`} className="border-border/60 shadow-sm hover:shadow-md transition-shadow">
                       <CardContent className="p-3">
                         {/* Header */}
                         <div className="flex items-center justify-between mb-2">
