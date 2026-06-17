@@ -96,11 +96,11 @@ function WishlistPage() {
         let coverUrl = null;
         if (item.coverStoragePath) {
           if (item.listingType === "product") {
-            coverUrl = supabase.storage.from("product-images").getPublicUrl(item.coverStoragePath).data.publicUrl;
+            coverUrl = item.coverStoragePath;
           } else if (item.listingType === "rental") {
-            coverUrl = supabase.storage.from("rental-images").getPublicUrl(item.coverStoragePath).data.publicUrl;
+            coverUrl = item.coverStoragePath;
           } else if (item.listingType === "food") {
-            coverUrl = supabase.storage.from("food-images").getPublicUrl(item.coverStoragePath).data.publicUrl;
+            coverUrl = item.coverStoragePath;
           }
         }
         return {

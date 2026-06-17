@@ -221,7 +221,7 @@ for (const img of images ?? []) {
   if (!imageMap.has(row.food_listing_id)) {
     imageMap.set(
       row.food_listing_id,
-      supabase.storage.from("food-images").getPublicUrl(row.storage_path).data.publicUrl,
+      row.storage_path,
     );
   }
 }

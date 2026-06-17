@@ -118,7 +118,7 @@ async function enrichRequests(rows: RentalRequestRow[]): Promise<RentalRequestDe
     if (!imageMap.has(row.rental_id)) {
       imageMap.set(
         row.rental_id,
-        supabase.storage.from("rental-images").getPublicUrl(row.storage_path).data.publicUrl,
+        row.storage_path,
       );
     }
   }

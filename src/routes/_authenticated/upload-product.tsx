@@ -34,6 +34,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { uploadToCloudinary } from '@/lib/cloudinary-upload';
+
 import {
   Select,
   SelectContent,
@@ -205,7 +207,7 @@ function UploadProductPage() {
       if (!cancelled && imagesRows?.length) {
         const previews = imagesRows.map(
           (r: any) =>
-            supabase.storage.from("product-images").getPublicUrl(r.storage_path).data.publicUrl,
+            r.storage_path,
         );
         setImagePreviews(previews as string[]);
       }
@@ -227,7 +229,7 @@ function UploadProductPage() {
       if (cancelled || !imageRows?.length || images.length > 0) return;
       const previews = imageRows.map(
         (row: { storage_path: string }) =>
-          supabase.storage.from("product-images").getPublicUrl(row.storage_path).data.publicUrl,
+          row.storage_path,
       );
       setImagePreviews(previews);
     })();
@@ -338,24 +340,20 @@ function UploadProductPage() {
     }
 
     if (images.length > 0) {
-      await supabase.from(PRODUCT_IMAGES_TABLE).delete().eq("product_id", productId);
-      const bucket = "product-images";
-      for (let i = 0; i < images.length; i++) {
-        const file = images[i];
-        const objectName = `${productId}/${i}-${file.name.replaceAll("/", "-")}`;
-        const { error: uploadErr } = await supabase.storage.from(bucket).upload(objectName, file, {
-          upsert: true,
-          contentType: file.type,
-        });
-        if (uploadErr) throw uploadErr;
-        const { error: imageInsertErr } = await supabase.from(PRODUCT_IMAGES_TABLE).insert({
-          product_id: productId,
-          storage_path: objectName,
-          sort_index: i,
-        });
-        if (imageInsertErr) throw imageInsertErr;
-      }
-    }
+  await supabase.from(PRODUCT_IMAGES_TABLE).delete().eq("product_id", productId);
+
+  for (let i = 0; i < images.length; i++) {
+    const file = images[i];
+    const imageUrl = await uploadToCloudinary(file, 'product-images');
+
+    const { error: imageInsertErr } = await supabase.from(PRODUCT_IMAGES_TABLE).insert({
+      product_id: productId,
+      storage_path: imageUrl,
+      sort_index: i,
+    });
+    if (imageInsertErr) throw imageInsertErr;
+  }
+}
 
     return productId!;
   };

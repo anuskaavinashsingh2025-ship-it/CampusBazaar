@@ -157,7 +157,7 @@ function MarketplaceHome() {
         const sorted = (imageMap.get(p.id) ?? []).sort((a, b) => a.sort_index - b.sort_index);
         const cover = sorted[0]?.storage_path ?? null;
         const coverImageUrl = cover
-          ? supabase.storage.from("product-images").getPublicUrl(cover).data.publicUrl
+          ? cover
           : null;
 
         return {
@@ -194,7 +194,7 @@ function MarketplaceHome() {
         .eq("status", "available")
         .gte("expiry_date", today)
         .order("created_at", { ascending: false })
-        .limit(24);
+        .limit(8);
       if (error) throw error;
       const rows = (data ?? []) as any[];
       if (!rows.length) return { rows: [], images: [], sellers: [] };
@@ -231,7 +231,7 @@ function MarketplaceHome() {
         if (!imageMap.has(row.food_listing_id)) {
           imageMap.set(
             row.food_listing_id,
-            supabase.storage.from("food-images").getPublicUrl(row.storage_path).data.publicUrl,
+            row.storage_path,
           );
         }
       }
@@ -269,7 +269,7 @@ function MarketplaceHome() {
         )
         .eq("status", "available")
         .order("created_at", { ascending: false })
-        .limit(24);
+        .limit(8);
       if (error) throw error;
       const rows = (data ?? []) as any[];
       if (!rows.length) return { rows: [], images: [], sellers: [] };
@@ -306,7 +306,7 @@ function MarketplaceHome() {
         if (!imageMap.has(row.rental_id)) {
           imageMap.set(
             row.rental_id,
-            supabase.storage.from("rental-images").getPublicUrl(row.storage_path).data.publicUrl,
+            row.storage_path,
           );
         }
       }
@@ -352,7 +352,7 @@ function MarketplaceHome() {
 )
         .eq("status", "available")
         .order("created_at", { ascending: false })
-        .limit(24);
+        .limit(8);
       if (error) throw error;
       const rows = (data ?? []) as any[];
       if (!rows.length) return { rows: [], images: [], sellers: [] };
@@ -389,7 +389,7 @@ function MarketplaceHome() {
         if (!imageMap.has(row.listing_id)) {
           imageMap.set(
             row.listing_id,
-            supabase.storage.from("notes-assets").getPublicUrl(row.storage_path).data.publicUrl,
+            row.storage_path,
           );
         }
       }

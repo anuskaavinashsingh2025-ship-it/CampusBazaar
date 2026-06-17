@@ -9,7 +9,7 @@ import { useAuth } from "@/lib/auth";
 import { ensureSellerProfile } from "@/lib/supabase-account";
 import { checkBanStatus, enforceBanCheck } from "@/lib/ban-enforcement";
 import type { Database } from "@/integrations/supabase/types";
-
+import { uploadToCloudinary } from '@/lib/cloudinary-upload';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -132,7 +132,7 @@ function UploadNotesPage() {
         .order("sort_index", { ascending: true });
       if (!cancelled && imgs?.length) {
         const previews = imgs.map((r: any) =>
-          supabase.storage.from("notes-assets").getPublicUrl(r.storage_path).data.publicUrl,
+          r.storage_path,
         );
         // Not storing previews in state for now; new uploads will replace images when provided.
       }
@@ -236,26 +236,21 @@ function UploadNotesPage() {
         const bucket = "notes-assets";
         const images = previewImages.slice(0, 5);
         const uploadedPaths: string[] = [];
-        for (let i = 0; i < images.length; i++) {
-          const file = images[i];
-          const objectName = `${listingId}/${i}-${file.name.replaceAll("/", "-")}`;
-          console.log(`[Notes Upload] Uploading image ${i + 1}/${images.length}:`, objectName);
-          const { error: imgUploadErr } = await supabase.storage.from(bucket).upload(objectName, file, {
-            upsert: true,
-            contentType: file.type,
-          });
-          if (imgUploadErr) throw imgUploadErr;
-          uploadedPaths.push(objectName);
+        
 
-          const { error: imgMetaErr } = await supabase.from(NOTES_ASSETS_TABLE).insert({
-            listing_id: listingId,
-            kind: "image",
-            storage_path: objectName,
-            sort_index: i,
-          } satisfies NotesAssetInsertable);
-          if (imgMetaErr) throw imgMetaErr;
-          console.log(`[Notes Upload] Inserted image row ${i + 1}/${images.length}:`, { storage_path: objectName, sort_index: i });
-        }
+// inside the loop:
+for (let i = 0; i < images.length; i++) {
+  const file = images[i];
+  const imageUrl = await uploadToCloudinary(file, 'notes-assets');
+
+  const { error: imgMetaErr } = await supabase.from(NOTES_ASSETS_TABLE).insert({
+    listing_id: listingId,
+    kind: "image",
+    storage_path: imageUrl,
+    sort_index: i,
+  } satisfies NotesAssetInsertable);
+  if (imgMetaErr) throw imgMetaErr;
+}
         console.log("[Notes Upload] All images uploaded successfully:", uploadedPaths);
       }
 

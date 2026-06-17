@@ -146,7 +146,7 @@ function MarketplacePage() {
         const sorted = (imageMap.get(p.id) ?? []).sort((a, b) => a.sort_index - b.sort_index);
         const cover = sorted[0]?.storage_path ?? null;
         const coverImageUrl = cover
-          ? supabase.storage.from("product-images").getPublicUrl(cover).data.publicUrl
+          ? cover
           : null;
 
         return {

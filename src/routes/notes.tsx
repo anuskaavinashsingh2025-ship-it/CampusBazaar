@@ -253,7 +253,7 @@ function NotesHubPage() {
         if (!imageMap.has(row.listing_id)) {
           imageMap.set(
             row.listing_id,
-            supabase.storage.from("notes-assets").getPublicUrl(row.storage_path).data.publicUrl,
+            row.storage_path,
           );
         }
       }

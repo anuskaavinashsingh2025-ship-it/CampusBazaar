@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { uploadToCloudinary } from '@/lib/cloudinary-upload';
 import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
@@ -129,7 +130,7 @@ function UploadRentalPage() {
       if (!cancelled && imgs?.length) {
         const previews = imgs.map(
           (row: any) =>
-            supabase.storage.from("rental-images").getPublicUrl(row.storage_path).data.publicUrl,
+            row.storage_path,
         );
         setImagePreviews(previews as string[]);
       }
@@ -215,38 +216,33 @@ function UploadRentalPage() {
 
     // Only touch images if the user picked new ones
     if (images.length > 0) {
-      if (editingId) {
-        // remove old images first
-        const { data: oldImages } = await supabase
-          .from(RENTAL_IMAGES_TABLE)
-          .select("storage_path")
-          .eq("rental_id", rentalId);
+  if (editingId) {
+    const { data: oldImages } = await supabase
+      .from(RENTAL_IMAGES_TABLE)
+      .select("storage_path")
+      .eq("rental_id", rentalId);
 
-        if (oldImages?.length) {
-          await supabase.storage
-            .from(bucket)
-            .remove(oldImages.map((row: any) => row.storage_path));
-          await supabase.from(RENTAL_IMAGES_TABLE).delete().eq("rental_id", rentalId);
-        }
-      }
-
-      for (let i = 0; i < images.length; i++) {
-        const file = images[i];
-        const objectName = `${rentalId}/${i}-${file.name.replaceAll("/", "-")}`;
-
-        const { error: uploadErr } = await supabase.storage
-          .from(bucket)
-          .upload(objectName, file, { upsert: false, contentType: file.type });
-        if (uploadErr) throw uploadErr;
-
-        const { error: imageErr } = await supabase.from(RENTAL_IMAGES_TABLE).insert({
-          rental_id: rentalId,
-          storage_path: objectName,
-          sort_index: i,
-        } satisfies RentalImagesInsertable);
-        if (imageErr) throw imageErr;
-      }
+    if (oldImages?.length) {
+      await supabase.storage
+        .from(bucket)
+        .remove(oldImages.map((row: any) => row.storage_path));
+      await supabase.from(RENTAL_IMAGES_TABLE).delete().eq("rental_id", rentalId);
     }
+  }
+
+  for (let i = 0; i < images.length; i++) {
+  const raw = images[i];
+  const imageUrl = await uploadToCloudinary(raw, 'rental-images');
+  const objectName = imageUrl;
+
+  const { error: uploadErr } = await supabase.from(RENTAL_IMAGES_TABLE).insert({
+    rental_id: rentalId,
+    storage_path: imageUrl,
+    sort_index: i,
+  } satisfies RentalImagesInsertable);
+  if (uploadErr) throw uploadErr;
+}
+}
 
     await queryClient.invalidateQueries({ queryKey: ["rentals"] });
     toast.success(editingId ? "Rental updated!" : "Rental uploaded!");

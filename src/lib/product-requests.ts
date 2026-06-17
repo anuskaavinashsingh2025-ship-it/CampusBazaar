@@ -79,7 +79,7 @@ async function enrichProductRequests(rows: ProductRequestRow[]): Promise<Product
     if (!imageMap.has(row.product_id)) {
       imageMap.set(
         row.product_id,
-        supabase.storage.from("product-images").getPublicUrl(row.storage_path).data.publicUrl,
+        row.storage_path,
       );
     }
   }

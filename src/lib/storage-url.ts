@@ -1,5 +1,3 @@
-import { supabase } from "@/integrations/supabase/client";
-
 export type StorageBucket =
   | "product-images"
   | "rental-images"
@@ -9,5 +7,8 @@ export type StorageBucket =
   | "avatars";
 
 export function getStoragePublicUrl(bucket: StorageBucket, storagePath: string): string {
-  return supabase.storage.from(bucket).getPublicUrl(storagePath).data.publicUrl;
+  // If already a full URL (Cloudinary), return as-is
+  if (storagePath?.startsWith('http')) return storagePath;
+  // Fallback for any old Supabase paths still in DB
+  return `https://gspyomabbvtlcuskszyn.supabase.co/storage/v1/object/public/${bucket}/${storagePath}`;
 }

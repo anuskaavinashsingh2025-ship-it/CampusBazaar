@@ -120,7 +120,7 @@ function SellerPage() {
         if (!imageMap.has(row.product_id)) {
           imageMap.set(
             row.product_id,
-            supabase.storage.from("product-images").getPublicUrl(row.storage_path).data.publicUrl,
+            row.storage_path,
           );
         }
       }
@@ -195,7 +195,7 @@ function SellerPage() {
         if (!imageMap.has(row.rental_id)) {
           imageMap.set(
             row.rental_id,
-            supabase.storage.from("rental-images").getPublicUrl(row.storage_path).data.publicUrl,
+            row.storage_path,
           );
         }
       }
@@ -268,7 +268,7 @@ function SellerPage() {
         if (!imageMap.has(row.listing_id)) {
           imageMap.set(
             row.listing_id,
-            supabase.storage.from("notes-assets").getPublicUrl(row.storage_path).data.publicUrl,
+            row.storage_path,
           );
         }
       }
@@ -352,7 +352,7 @@ function SellerPage() {
         if (!imageMap.has(row.product_id)) {
           imageMap.set(
             row.product_id,
-            supabase.storage.from("product-images").getPublicUrl(row.storage_path).data.publicUrl,
+            row.storage_path,
           );
         }
       }
@@ -426,7 +426,7 @@ function SellerPage() {
         if (!imageMap.has(row.rental_id)) {
           imageMap.set(
             row.rental_id,
-            supabase.storage.from("rental-images").getPublicUrl(row.storage_path).data.publicUrl,
+            row.storage_path,
           );
         }
       }
@@ -499,7 +499,7 @@ function SellerPage() {
         if (!imageMap.has(row.listing_id)) {
           imageMap.set(
             row.listing_id,
-            supabase.storage.from("notes-assets").getPublicUrl(row.storage_path).data.publicUrl,
+            row.storage_path,
           );
         }
       }
@@ -576,7 +576,7 @@ function SellerPage() {
         if (!imageMap.has(row.food_listing_id)) {
           imageMap.set(
             row.food_listing_id,
-            supabase.storage.from("food-images").getPublicUrl(row.storage_path).data.publicUrl,
+            row.storage_path,
           );
         }
       }

@@ -9,7 +9,7 @@ import type { Database } from "@/integrations/supabase/types";
 import { useAuth } from "@/lib/auth";
 import { ensureSellerProfile } from "@/lib/supabase-account";
 import { checkBanStatus, enforceBanCheck } from "@/lib/ban-enforcement";
-
+import { uploadToCloudinary } from '@/lib/cloudinary-upload';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -110,7 +110,7 @@ function UploadFoodPage() {
         .order("sort_index", { ascending: true });
       if (!cancelled && imgs?.length) {
         const previews = imgs.map(
-          (r: any) => supabase.storage.from("food-images").getPublicUrl(r.storage_path).data.publicUrl,
+          (r: any) => r.storage_path,
         );
         // Store previews in the images state by using a synthetic File-less preview array via setImages([]) and maybe separate state? Simpler: setImages([]) and keep previews in local variable
         // We don't have a dedicated preview state in this component; rely on images File[] for new uploads and not display existing previews for now.
@@ -212,30 +212,22 @@ function UploadFoodPage() {
 
       // If new images were provided, replace existing image rows and upload
       if (images.length > 0) {
-        console.log("[Food Upload] Uploading images:", { count: images.length, listingId });
-        await supabase.from(FOOD_IMAGES_TABLE).delete().eq("food_listing_id", listingId as never);
-        const bucket = "food-images";
-        const uploadedPaths: string[] = [];
-        for (let i = 0; i < images.length; i++) {
-          const file = images[i];
-          const objectName = `${listingId}/${i}-${file.name.replaceAll("/", "-")}`;
-          console.log(`[Food Upload] Uploading image ${i + 1}/${images.length}:`, objectName);
-          const { error: uploadErr } = await supabase.storage.from(bucket).upload(objectName, file, {
-            upsert: true,
-            contentType: file.type,
-          });
-          if (uploadErr) throw uploadErr;
-          uploadedPaths.push(objectName);
-          const { error: imgErr } = await supabase.from(FOOD_IMAGES_TABLE).insert({
-            food_listing_id: listingId,
-            storage_path: objectName,
-            sort_index: i,
-          } as never);
-          if (imgErr) throw imgErr;
-          console.log(`[Food Upload] Inserted image row ${i + 1}/${images.length}:`, { storage_path: objectName, sort_index: i });
-        }
-        console.log("[Food Upload] All images uploaded successfully:", uploadedPaths);
-      }
+  await supabase.from(FOOD_IMAGES_TABLE).delete().eq("food_listing_id", listingId as never);
+  const uploadedPaths: string[] = [];
+
+  for (let i = 0; i < images.length; i++) {
+    const file = images[i];
+    const imageUrl = await uploadToCloudinary(file, 'food-images');
+    uploadedPaths.push(imageUrl);
+
+    const { error: imgErr } = await supabase.from(FOOD_IMAGES_TABLE).insert({
+      food_listing_id: listingId,
+      storage_path: imageUrl,
+      sort_index: i,
+    } as never);
+    if (imgErr) throw imgErr;
+  }
+}
 
       await queryClient.invalidateQueries({ queryKey: ["food"] });
       toast.success(listingId && editId ? "Listing updated!" : "Food listing posted!");

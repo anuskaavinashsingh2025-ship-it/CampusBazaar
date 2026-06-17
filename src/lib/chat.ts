@@ -830,7 +830,7 @@ export function useUploadChatImage(userId: string | null | undefined) {
 }
 
 export function getChatImageUrl(storagePath: string) {
-  return supabase.storage.from("chat-images").getPublicUrl(storagePath).data.publicUrl;
+  return storagePath;
 }
 
 export function useMarkConversationRead(userId: string | null | undefined) {
