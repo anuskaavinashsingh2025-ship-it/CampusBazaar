@@ -129,33 +129,36 @@ function UserProfilePage() {
   }, [profile?.full_name, user?.email]);
 
   const handlePhotoUpload = async (file: File) => {
-    if (!user) return;
-    setUploadingPhoto(true);
-    try {
-      const ext = file.name.split(".").pop() ?? "jpg";
-      const path = `${user.id}/avatar.${ext}`;
-      console.log("[AVATAR BUCKET]", "avatars");
-      const { error: uploadErr, data: uploadData } = await supabase.storage
-        .from("avatars")
-        .upload(path, file, { upsert: true, contentType: file.type });
-      console.log("[AVATAR UPLOAD RESULT]", { data: uploadData, error: uploadErr });
-      if (uploadErr) throw uploadErr;
-      const { data } = supabase.storage.from("avatars").getPublicUrl(path);
-      const url = `${data.publicUrl}?t=${Date.now()}`;
-      setAvatarUrl(url);
-      const { error } = await supabase
-        .from("profiles")
-        .update({ avatar_url: url })
-        .eq("id", user.id);
-      if (error) throw error;
-      await refreshProfile();
-      toast.success("Profile photo updated");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not upload photo");
-    } finally {
-      setUploadingPhoto(false);
-    }
-  };
+  if (!user) return;
+  setUploadingPhoto(true);
+  try {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('upload_preset', 'campusbazaar');
+    formData.append('folder', 'avatars');
+
+    const res = await fetch(
+      'https://api.cloudinary.com/v1_1/dchs7jfzv/image/upload',
+      { method: 'POST', body: formData }
+    );
+    if (!res.ok) throw new Error('Upload failed');
+    const data = await res.json();
+    const url = data.secure_url as string;
+
+    setAvatarUrl(url);
+    const { error } = await supabase
+      .from("profiles")
+      .update({ avatar_url: url })
+      .eq("id", user.id);
+    if (error) throw error;
+    await refreshProfile();
+    toast.success("Profile photo updated");
+  } catch (err) {
+    toast.error(err instanceof Error ? err.message : "Could not upload photo");
+  } finally {
+    setUploadingPhoto(false);
+  }
+};
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();

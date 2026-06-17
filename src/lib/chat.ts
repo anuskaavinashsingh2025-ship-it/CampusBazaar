@@ -814,14 +814,18 @@ export function useUploadChatImage(userId: string | null | undefined) {
       if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
         throw new Error("Only JPEG, PNG, GIF, and WebP images are allowed.");
       }
-      const ext = file.name.split(".").pop()?.toLowerCase() ?? "jpg";
-      const path = `${userId}/${crypto.randomUUID()}.${ext}`;
-      const { error } = await supabase.storage.from("chat-images").upload(path, file, {
-        contentType: file.type,
-        upsert: false,
-      });
-      if (error) throw error;
-      return path;
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('upload_preset', 'campusbazaar');
+      formData.append('folder', 'chat-images');
+
+      const res = await fetch(
+        'https://api.cloudinary.com/v1_1/dchs7jfzv/image/upload',
+        { method: 'POST', body: formData }
+      );
+      if (!res.ok) throw new Error('Image upload failed');
+      const data = await res.json();
+      return data.secure_url as string;
     },
     onError: (err) => {
       toast.error(err instanceof Error ? err.message : "Could not upload image");
@@ -982,7 +986,6 @@ if (rentalError) {
 }
 }
 if (conversation.context_type === "food") {
-  // Update food_order status using request_id
   if (conversation.request_id) {
     const { error: foodOrderError } = await supabase
       .from("food_orders")
@@ -991,52 +994,50 @@ if (conversation.context_type === "food") {
     if (foodOrderError) console.error("Food order update failed", foodOrderError);
   }
 
-  // context_id is food_listings.id for listing chats,
-  // food_requests.id for request chats — try both, one will silently no-op
+  // Try updating food_listings — will no-op if context_id is a food_request id
   const { error: foodListingError } = await supabase
     .from("food_listings")
     .update({ status: "sold" })
     .eq("id", conversation.context_id);
   if (foodListingError) console.error("Food listing update failed", foodListingError);
 
-  // Only mark food_request fulfilled if context_id matches a food_request
-  // (i.e. this is a food request chat, not a food listing chat)
-  if (conversation.context_id !== conversation.request_id) {
-    const { error: foodRequestError } = await supabase
-      .from("food_requests")
-      .update({ status: "fulfilled" })
-      .eq("id", conversation.context_id);
-    if (foodRequestError) console.error("Food request update failed", foodRequestError);
-  }
+  // Always try to mark food_request fulfilled — will no-op if context_id is a listing id
+  const { error: foodRequestError } = await supabase
+    .from("food_requests")
+    .update({ status: "fulfilled" })
+    .eq("id", conversation.context_id);
+  if (foodRequestError) console.error("Food request update failed", foodRequestError);
 }
 if (conversation.context_type === "notes") {
+  // Check if context_id is a notes_listing or notes_request
   const { data: notesListing } = await supabase
     .from("notes_listings")
     .select("listing_type")
     .eq("id", conversation.context_id)
     .maybeSingle();
 
-  const listingType = (notesListing as { listing_type?: "sell" | "rent" } | null)?.listing_type;
+  if (notesListing) {
+    // This is a notes listing chat — update listing status
+    const { error: notesRequestError } = await supabase
+      .from("notes_purchase_requests")
+      .update({ status: "completed" })
+      .eq("id", conversation.request_id);
+    if (notesRequestError) console.error("Notes purchase request update failed", notesRequestError);
 
-  const { error: notesRequestError } = await supabase
-    .from("notes_purchase_requests")
-    .update({ status: "completed" })
-    .eq("id", conversation.request_id);
-  if (notesRequestError) console.error("Notes request update failed", notesRequestError);
-
-  // ← ADD THIS: mark notes_requests as fulfilled so it disappears from marketplace
-  const { error: notesMarketRequestError } = await supabase
-    .from("notes_requests")
-    .update({ status: "fulfilled" })
-    .eq("id", conversation.context_id);
-  if (notesMarketRequestError) console.error("Notes market request update failed", notesMarketRequestError);
-
-  if (listingType !== "rent") {
-    const { error: notesError } = await supabase
-      .from("notes_listings")
-      .update({ status: "unavailable" })
+    if (notesListing.listing_type !== "rent") {
+      const { error: notesError } = await supabase
+        .from("notes_listings")
+        .update({ status: "unavailable" })
+        .eq("id", conversation.context_id);
+      if (notesError) console.error("Notes listing update failed", notesError);
+    }
+  } else {
+    // This is a notes REQUEST chat — update notes_requests status
+    const { error: notesMarketRequestError } = await supabase
+      .from("notes_requests")
+      .update({ status: "fulfilled" })
       .eq("id", conversation.context_id);
-    if (notesError) console.error("Notes update failed", notesError);
+    if (notesMarketRequestError) console.error("Notes market request update failed", notesMarketRequestError);
   }
 }
      

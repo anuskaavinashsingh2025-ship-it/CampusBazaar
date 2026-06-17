@@ -292,13 +292,21 @@ function RentFeedPage() {
             <p className="text-sm text-muted-foreground">
               Temporary. Affordable. Convenient. Rent items from students around you.
             </p>
-            <Button
-              onClick={() =>
-                document.getElementById("rental-listings")?.scrollIntoView({ behavior: "smooth" })
-              }
-            >
-              Explore Rentals
-            </Button>
+ <div className="flex gap-3">
+  <Button
+    onClick={() =>
+      document.getElementById("rental-listings")?.scrollIntoView({ behavior: "smooth" })
+    }
+  >
+    Explore Rentals
+  </Button>
+  <Button
+    variant="outline"
+    onClick={() => (user ? navigate({ to: "/upload-rental" }) : navigate({ to: "/login" }))}
+  >
+    List for Rent
+  </Button>
+</div>
           </div>
           <div className="hidden h-40 rounded-2xl bg-gradient-to-br from-primary/15 via-orange-100/50 to-sky-100 sm:block" />
         </section>
