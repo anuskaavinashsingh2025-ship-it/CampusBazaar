@@ -42,12 +42,34 @@ function formatInr(amount: number) {
   return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(amount);
 }
 
+function formatRelativeTime(dateString: string): string {
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffSecs = Math.floor(diffMs / 1000);
+  const diffMins = Math.floor(diffSecs / 60);
+  const diffHours = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHours / 24);
+  const diffWeeks = Math.floor(diffDays / 7);
+  const diffMonths = Math.floor(diffDays / 30);
+  const diffYears = Math.floor(diffDays / 365);
+
+  if (diffSecs < 60) return "just now";
+  if (diffMins < 60) return `${diffMins} minute${diffMins > 1 ? "s" : ""} ago`;
+  if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? "s" : ""} ago`;
+  if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? "s" : ""} ago`;
+  if (diffWeeks < 4) return `${diffWeeks} week${diffWeeks > 1 ? "s" : ""} ago`;
+  if (diffMonths < 12) return `${diffMonths} month${diffMonths > 1 ? "s" : ""} ago`;
+  return `${diffYears} year${diffYears > 1 ? "s" : ""} ago`;
+}
+
 function SellerPage() {
   const { slug } = Route.useParams();
   const { user } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<"products" | "rentals" | "notes" | "reviews" | "completed">("products");
+  const [expandedReviews, setExpandedReviews] = useState<Set<string>>(new Set());
 
   const { data: seller, isLoading } = useQuery({
     queryKey: ["seller", slug],
@@ -149,7 +171,7 @@ function SellerPage() {
             display_name: seller.display_name,
             // Prefer the authoritative profile avatar when available
             avatar_url: (userProfile?.avatar_url as string | null) ?? seller.avatar_url,
-            rating_avg: Number(seller.rating_avg),
+            rating_avg: Number(seller.rating_avg || 0),
           },
           coverImageUrl: imageMap.get(p.id) ?? null,
         }),
@@ -221,7 +243,7 @@ function SellerPage() {
             slug: seller.slug,
             display_name: seller.display_name,
             avatar_url: (userProfile?.avatar_url as string | null) ?? seller.avatar_url,
-            rating_avg: Number(seller.rating_avg),
+            rating_avg: Number(seller.rating_avg || 0),
           },
           coverImageUrl: imageMap.get(r.id) ?? null,
         }),
@@ -308,7 +330,7 @@ function SellerPage() {
             slug: seller.slug,
             display_name: seller.display_name,
             avatar_url: (userProfile?.avatar_url as string | null) ?? seller.avatar_url,
-            rating_avg: Number(seller.rating_avg),
+            rating_avg: Number(seller.rating_avg || 0),
           },
           coverImageUrl: imageMap.get(n.id) ?? null,
         }),
@@ -381,7 +403,7 @@ function SellerPage() {
             slug: seller.slug,
             display_name: seller.display_name,
             avatar_url: (userProfile?.avatar_url as string | null) ?? seller.avatar_url,
-            rating_avg: Number(seller.rating_avg),
+            rating_avg: Number(seller.rating_avg || 0),
           },
           coverImageUrl: imageMap.get(p.id) ?? null,
           updated_at: p.updated_at,
@@ -453,7 +475,7 @@ function SellerPage() {
             slug: seller.slug,
             display_name: seller.display_name,
             avatar_url: (userProfile?.avatar_url as string | null) ?? seller.avatar_url,
-            rating_avg: Number(seller.rating_avg),
+            rating_avg: Number(seller.rating_avg || 0),
           },
           coverImageUrl: imageMap.get(r.id) ?? null,
           updated_at: r.updated_at,
@@ -530,7 +552,7 @@ function SellerPage() {
             slug: seller.slug,
             display_name: seller.display_name,
             avatar_url: (userProfile?.avatar_url as string | null) ?? seller.avatar_url,
-            rating_avg: Number(seller.rating_avg),
+            rating_avg: Number(seller.rating_avg || 0),
           },
           coverImageUrl: imageMap.get(p.id) ?? null,
           updated_at: p.updated_at,
@@ -605,7 +627,7 @@ function SellerPage() {
             slug: seller.slug,
             display_name: seller.display_name,
             avatar_url: (userProfile?.avatar_url as string | null) ?? seller.avatar_url,
-            rating_avg: Number(seller.rating_avg),
+            rating_avg: Number(seller.rating_avg || 0),
           },
           coverImageUrl: imageMap.get(p.id) ?? null,
           updated_at: p.updated_at,
@@ -619,7 +641,7 @@ function SellerPage() {
     queryFn: async () => {
       if (!seller) return null;
 
-      const [productSales, notesSales, foodSales, rentalCompletions, reviews] = await Promise.all([
+      const [productSales, notesSales, foodSales, rentalCompletions] = await Promise.all([
         supabase
           .from("product_listings" as unknown as keyof Database["public"]["Tables"])
           .select("id")
@@ -640,10 +662,6 @@ function SellerPage() {
   .select("id")
   .eq("seller_id", seller.user_id)
   .eq("status", "completed"),
-        supabase
-          .from("reviews" as unknown as keyof Database["public"]["Tables"])
-          .select("id,rating")
-          .eq("seller_user_id", seller.user_id),
       ]);
 
       const totalSales =
@@ -651,21 +669,66 @@ function SellerPage() {
         (notesSales.data?.length ?? 0) +
         (foodSales.data?.length ?? 0);
       const rentalsCompleted = rentalCompletions.data?.length ?? 0;
-      const reviewsReceived = reviews.data?.length ?? 0;
-      const averageRating =
-        reviewsReceived > 0
-          ? (reviews.data?.reduce((sum: number, r: { rating: number }) => sum + r.rating, 0) ?? 0) /
-            reviewsReceived
-          : 0;
 
       return {
         totalSales,
         rentalsCompleted,
-        reviewsReceived,
-        averageRating,
       };
     },
     enabled: Boolean(seller?.user_id),
+  });
+
+  const { data: sellerReviews = [], isLoading: isLoadingReviews } = useQuery({
+    queryKey: ["seller_reviews", seller?.user_id],
+    queryFn: async () => {
+      if (!seller) return [];
+      const { data, error } = await supabase
+        .from("conversation_ratings" as unknown as keyof Database["public"]["Tables"])
+        .select(`
+          rating,
+          review,
+          created_at,
+          rater_id,
+          conversations!inner(
+            seller_id
+          )
+        `)
+        .eq("conversations.seller_id", seller.user_id)
+        .not("review", "is", null)
+        .order("created_at", { ascending: false })
+        .limit(50);
+      
+      if (error) throw error;
+      
+      // Get reviewer names from profiles
+      const reviews = data ?? [];
+      const reviewerIds = reviews.map((r: any) => r.rater_id).filter((id: string) => id);
+      
+      let reviewerNames: Record<string, string> = {};
+      if (reviewerIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from("profiles")
+          .select("id, full_name")
+          .in("id", reviewerIds);
+        
+        if (profiles) {
+          reviewerNames = profiles.reduce((acc: Record<string, string>, p: any) => {
+            acc[p.id] = p.full_name || "Anonymous";
+            return acc;
+          }, {});
+        }
+      }
+      
+      return reviews.map((r: any) => ({
+        rating: r.rating,
+        review: r.review,
+        created_at: r.created_at,
+        reviewerName: reviewerNames[r.rater_id] || "Anonymous",
+      }));
+    },
+    enabled: Boolean(seller?.user_id),
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
   });
 
   const { data: existingConversation } = useQuery({
@@ -704,7 +767,7 @@ function SellerPage() {
           .eq("status", "accepted")
           .limit(1),
         supabase
-          .from("notes_purchases" as unknown as keyof Database["public"]["Tables"])
+          .from("notes_purchase_requests" as unknown as keyof Database["public"]["Tables"])
           .select("id")
           .eq("buyer_id", user.id)
           .eq("seller_id", seller.user_id)
@@ -834,7 +897,7 @@ function SellerPage() {
                         <span className="flex items-center gap-1">
                           <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
                           <strong>
-                            {(sellerMetrics?.averageRating ?? Number(seller.rating_avg)).toFixed(1)}
+                            {(seller.rating_avg ?? 0).toFixed(1)}
                           </strong>
                         </span>
                         <span className="flex items-center gap-1 text-muted-foreground">
@@ -893,10 +956,10 @@ function SellerPage() {
                     ["Total sales", sellerMetrics?.totalSales ?? 0],
                     ["Active listings", products.length],
                     ["Rentals completed", sellerMetrics?.rentalsCompleted ?? 0],
-                    ["Reviews received", sellerMetrics?.reviewsReceived ?? seller.rating_count],
+                    ["Reviews received", seller.rating_count],
                     [
                       "Average rating",
-                      `${(sellerMetrics?.averageRating ?? Number(seller.rating_avg)).toFixed(1)} / 5`,
+                      `${(seller.rating_avg ?? 0).toFixed(1)} / 5`,
                     ],
                   ].map(([label, value]) => (
                     <div key={String(label)} className="rounded-lg bg-muted/40 p-3">
@@ -948,7 +1011,7 @@ function SellerPage() {
                 <TabsTrigger value="rentals">Rentals ({rentals.length})</TabsTrigger>
                 <TabsTrigger value="notes">Notes ({notes.length})</TabsTrigger>
                 <TabsTrigger value="reviews">
-                  Reviews ({sellerMetrics?.reviewsReceived ?? seller.rating_count})
+                  Reviews ({seller.rating_count})
                 </TabsTrigger>
                 <TabsTrigger value="completed">
                   Completed (
@@ -1062,36 +1125,152 @@ function SellerPage() {
               </TabsContent>
 
               <TabsContent value="reviews" className="mt-4">
-                <Card>
-                  <CardContent className="py-8">
-                    <div className="flex flex-col items-center gap-2 text-center">
-                      <div className="text-4xl font-bold">
-                        {(sellerMetrics?.averageRating ?? Number(seller.rating_avg)).toFixed(1)}
-                      </div>
-                      <div className="flex gap-1">
-                        {[1, 2, 3, 4, 5].map((i) => (
-                          <Star
-                            key={i}
-                            className={`h-5 w-5 ${
-                              i <=
-                              Math.round(sellerMetrics?.averageRating ?? Number(seller.rating_avg))
-                                ? "fill-amber-400 text-amber-400"
-                                : "text-muted-foreground"
-                            }`}
-                          />
-                        ))}
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        {sellerMetrics?.reviewsReceived ?? seller.rating_count} reviews
-                      </p>
-                      {(sellerMetrics?.reviewsReceived ?? seller.rating_count) === 0 && (
-                        <p className="mt-4 text-sm text-muted-foreground">
-                          No written reviews yet. Be the first to buy from this seller!
+                <div className="space-y-6">
+                  <Card>
+                    <CardContent className="py-8">
+                      <div className="flex flex-col items-center gap-2 text-center">
+                        <div className="text-4xl font-bold">
+                          {(seller.rating_avg ?? 0).toFixed(1)}
+                        </div>
+                        <div className="flex gap-1">
+                          {[1, 2, 3, 4, 5].map((i) => (
+                            <Star
+                              key={i}
+                              className={`h-5 w-5 ${
+                                i <=
+                                Math.round(seller.rating_avg ?? 0)
+                                  ? "fill-amber-400 text-amber-400"
+                                  : "text-muted-foreground"
+                              }`}
+                            />
+                          ))}
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          {seller.rating_count} reviews
                         </p>
-                      )}
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {isLoadingReviews ? (
+                    <div className="space-y-4">
+                      {[1, 2, 3].map((i) => (
+                        <Card key={i}>
+                          <CardContent className="p-6">
+                            <div className="flex items-start gap-4">
+                              <div className="h-10 w-10 rounded-full bg-muted animate-pulse" />
+                              <div className="flex-1 space-y-2">
+                                <div className="h-4 w-32 bg-muted animate-pulse rounded" />
+                                <div className="h-3 w-24 bg-muted animate-pulse rounded" />
+                                <div className="flex gap-1 mt-2">
+                                  {[1, 2, 3, 4, 5].map((j) => (
+                                    <div key={j} className="h-4 w-4 bg-muted animate-pulse rounded" />
+                                  ))}
+                                </div>
+                                <div className="space-y-1 mt-3">
+                                  <div className="h-4 w-full bg-muted animate-pulse rounded" />
+                                  <div className="h-4 w-3/4 bg-muted animate-pulse rounded" />
+                                  <div className="h-4 w-1/2 bg-muted animate-pulse rounded" />
+                                </div>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
                     </div>
-                  </CardContent>
-                </Card>
+                  ) : sellerReviews.length > 0 ? (
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-semibold">
+                          {sellerReviews.length} Review{sellerReviews.length !== 1 ? "s" : ""}
+                        </h3>
+                      </div>
+                      {sellerReviews.map((review: any) => {
+                        const isExpanded = expandedReviews.has(review.created_at);
+                        const reviewLines = review.review.split("\n").length;
+                        const shouldTruncate = reviewLines > 4 && !isExpanded;
+                        
+                        return (
+                          <Card 
+                            key={review.created_at}
+                            className="transition-shadow hover:shadow-md"
+                          >
+                            <CardContent className="p-6">
+                              <div className="flex items-start gap-4">
+                                <Avatar className="h-10 w-10">
+                                  <AvatarFallback className="bg-primary text-primary-foreground text-sm">
+                                    {review.reviewerName.slice(0, 2).toUpperCase()}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-start justify-between gap-4">
+                                    <div className="flex-1">
+                                      <p className="text-sm font-semibold">{review.reviewerName}</p>
+                                      <p className="text-xs text-muted-foreground mt-0.5">
+                                        {formatRelativeTime(review.created_at)}
+                                      </p>
+                                    </div>
+                                    <div className="flex gap-0.5 flex-shrink-0">
+                                      {[1, 2, 3, 4, 5].map((i) => (
+                                        <Star
+                                          key={i}
+                                          className={`h-4 w-4 ${
+                                            i <= review.rating
+                                              ? "fill-amber-400 text-amber-400"
+                                              : "text-muted-foreground"
+                                          }`}
+                                        />
+                                      ))}
+                                    </div>
+                                  </div>
+                                  <div className="mt-3">
+                                    <p 
+                                      className={`text-sm leading-relaxed ${
+                                        shouldTruncate 
+                                          ? "line-clamp-4" 
+                                          : ""
+                                      }`}
+                                    >
+                                      {review.review}
+                                    </p>
+                                    {reviewLines > 4 && (
+                                      <button
+                                        onClick={() => {
+                                          const newExpanded = new Set(expandedReviews);
+                                          if (isExpanded) {
+                                            newExpanded.delete(review.created_at);
+                                          } else {
+                                            newExpanded.add(review.created_at);
+                                          }
+                                          setExpandedReviews(newExpanded);
+                                        }}
+                                        className="text-xs text-primary hover:underline mt-2"
+                                      >
+                                        {isExpanded ? "Show less" : "Read more"}
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <Card className="border-dashed">
+                      <CardContent className="py-12 text-center">
+                        <div className="flex flex-col items-center gap-2">
+                          <Star className="h-8 w-8 text-muted-foreground" />
+                          <p className="text-sm font-medium">No reviews yet</p>
+                          <p className="text-sm text-muted-foreground">
+                            This seller has not received any written reviews yet.
+                          </p>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+                </div>
               </TabsContent>
 
               <TabsContent value="completed" className="mt-4">

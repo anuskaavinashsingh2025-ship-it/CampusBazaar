@@ -86,6 +86,7 @@ function ChatThreadPage() {
   const [loadingRentalStatus, setLoadingRentalStatus] = useState(false);
   const [rentalCompletionModalOpen, setRentalCompletionModalOpen] = useState(false);
   const [notesCompletionModalOpen, setNotesCompletionModalOpen] = useState(false);
+  const [isNotesRental, setIsNotesRental] = useState(false);
 
   useMessageRealtime(id);
   useUpdatePresence(user?.id);
@@ -204,7 +205,7 @@ function ChatThreadPage() {
   const isBuyer = conversation.buyer_id === user?.id;
   const isCompletionRequester = conversation.completion_requested_by === user?.id;
   const isCompletionConfirmer = isCompletionPending && !isCompletionRequester;
-  const [isNotesRental, setIsNotesRental] = useState(false);
+
 
   const STATUS_STYLES: Record<string, string> = {
     pending: "bg-yellow-100 text-yellow-800",
@@ -279,7 +280,7 @@ function ChatThreadPage() {
           </Badge>
         )}
         <div className="ml-auto flex items-center gap-1 overflow-x-auto max-w-[70vw] scrollbar-none">
-          {isCompleted && (
+          {isCompleted && isBuyer && (
             <Button
               variant="ghost"
               size="sm"

@@ -13,6 +13,7 @@ import {
   UtensilsCrossed,
   FileText,
   Bike,
+  Star,
 } from "lucide-react";
 
 import { useAuth } from "@/lib/auth";
@@ -33,7 +34,19 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/notifications")({
   head: () => ({
@@ -76,6 +89,66 @@ function NotificationsPage() {
   const [filterModule, setFilterModule] = useState<NotificationModule | "all">("all");
   const [filterPriority, setFilterPriority] = useState<string>("all");
   const [filterRead, setFilterRead] = useState<string>("all");
+
+  const [ratingOpen, setRatingOpen] = useState(false);
+  const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
+  const [rating, setRating] = useState("5");
+  const [review, setReview] = useState("");
+
+  // Query to check which conversations have reviews for the current user
+  const { data: userReviews = [] } = useQuery({
+    queryKey: ["user_conversation_reviews", user?.id],
+    queryFn: async () => {
+      if (!user?.id) return [];
+      const { data, error } = await supabase
+        .from("conversation_ratings")
+        .select("conversation_id")
+        .eq("rater_id", user.id);
+      if (error) throw error;
+      return data?.map((r: any) => r.conversation_id) ?? [];
+    },
+    enabled: Boolean(user?.id),
+  });
+
+  const reviewedConversationIds = new Set(userReviews);
+
+  // Mutation to submit rating
+  const submitRating = useMutation({
+    mutationFn: async (input: { conversationId: string; rating: number; review?: string }) => {
+      const { error } = await supabase.from("conversation_ratings").insert({
+        conversation_id: input.conversationId,
+        rater_id: user!.id,
+        rating: input.rating,
+        review: input.review?.trim() || null,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Thank you for your review!");
+      setRatingOpen(false);
+      setRating("5");
+      setReview("");
+      setSelectedConversationId(null);
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : "Could not submit rating");
+    },
+  });
+
+  const handleLeaveReview = (conversationId: string, event: React.MouseEvent) => {
+    event.stopPropagation();
+    setSelectedConversationId(conversationId);
+    setRatingOpen(true);
+  };
+
+  const handleSubmitReview = () => {
+    if (!selectedConversationId) return;
+    submitRating.mutate({
+      conversationId: selectedConversationId,
+      rating: Number(rating),
+      review,
+    });
+  };
 
   const priorityCounts = useMemo(() => {
     const unread = notifications.filter((n) => !n.read);
@@ -359,6 +432,50 @@ function NotificationsPage() {
                         ))}
                       </div>
                     )}
+                    {/* Show Leave Review button for transaction-completion notifications */}
+                    {(() => {
+                      const isTransactionCompleted = n.title === "Transaction Completed";
+                      const metadata = n.metadata as Record<string, unknown> | null;
+                      const hasConversationId = metadata && "conversationId" in metadata && metadata.conversationId;
+                      const conversationId = hasConversationId ? String(metadata.conversationId) : null;
+                      const hasReviewed = conversationId && reviewedConversationIds.has(conversationId);
+                      
+                      if (isTransactionCompleted && hasConversationId && conversationId && !hasReviewed) {
+                        return (
+                          <div className="mt-3">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                handleLeaveReview(conversationId, event);
+                              }}
+                              className="gap-1"
+                            >
+                              <Star className="h-3 w-3" />
+                              Leave Review
+                            </Button>
+                          </div>
+                        );
+                      }
+                      if (isTransactionCompleted && hasConversationId && conversationId && hasReviewed) {
+                        return (
+                          <div className="mt-3">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              disabled
+                              className="gap-1"
+                            >
+                              ✅ Review Submitted
+                            </Button>
+                          </div>
+                        );
+                      }
+                      return null;
+                    })()}
                     <p className="mt-2 text-xs text-muted-foreground">
                       {timeAgo(n.created_at)} · {MODULE_LABELS[n.module]}
                     </p>
@@ -373,6 +490,46 @@ function NotificationsPage() {
           No notifications match your filters.
         </div>
       )}
+
+      {/* Review Dialog */}
+      <Dialog open={ratingOpen} onOpenChange={setRatingOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Leave a Review</DialogTitle>
+            <DialogDescription>
+              Rate your experience with this transaction.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Rating (1–5)</Label>
+              <Input
+                type="number"
+                min={1}
+                max={5}
+                value={rating}
+                onChange={(e) => setRating(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Review (optional)</Label>
+              <Textarea value={review} onChange={(e) => setReview(e.target.value)} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRatingOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSubmitReview}
+              disabled={submitRating.isPending}
+            >
+              {submitRating.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Submit
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

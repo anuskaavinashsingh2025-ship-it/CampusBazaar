@@ -237,6 +237,28 @@ export function useCreateRentalRequest() {
       buyerHostel?: string;
     }) => {
       await enforceBanCheck(input.buyerId, "create a rental request");
+
+      // Check if a request already exists for this rental_id + buyer_id
+      const { data: existingRequest, error: checkError } = await supabase
+        .from(REQUESTS_TABLE)
+        .select("id, status")
+        .eq("rental_id", input.rentalId)
+        .eq("buyer_id", input.buyerId)
+        .maybeSingle();
+
+      if (checkError) throw checkError;
+
+      // If an existing request is found, check its status
+      if (existingRequest) {
+        const status = (existingRequest as { status: RentalRequestStatus }).status;
+        // If the request is pending, accepted, or active, don't allow a new request
+        if (status === "pending" || status === "accepted" || status === "active_rental") {
+          throw new Error("Request already exists.");
+        }
+        // If the request is rejected, withdrawn, completed, or returned, allow a new request
+        // (continue with insertion below)
+      }
+
       const message = formatRentalRequestMessage(input.form);
       const { data, error } = await supabase
         .from(REQUESTS_TABLE)
@@ -289,7 +311,14 @@ export function useCreateRentalRequest() {
       toast.success("Rental request sent!");
     },
     onError: (err) => {
-      toast.error(err instanceof Error ? err.message : "Could not send rental request");
+      const message = err instanceof Error ? err.message : "Could not send rental request";
+      if (message === "Request already exists.") {
+        toast.error("Request already exists.");
+      } else if (message.includes("duplicate key")) {
+        toast.error("You have already requested this rental.");
+      } else {
+        toast.error(message);
+      }
     },
   });
 }

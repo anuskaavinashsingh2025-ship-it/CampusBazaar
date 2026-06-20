@@ -474,7 +474,8 @@ function MarketplaceHome() {
 
   // Compute the items to show for the Fresh recommendations area.
   // On the home page preview we cap at 8 items — users click "View all" for the full list.
-  const HOME_PREVIEW_LIMIT = 8;
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
+const HOME_PREVIEW_LIMIT = isMobile ? 6 : 8;;
 
   const itemsToShow = useMemo(() => {
     if (isLoading) return [] as ProductCardModel[];
