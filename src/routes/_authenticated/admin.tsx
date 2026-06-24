@@ -159,42 +159,42 @@ function AdminPortalPage() {
   }, [allFeedback]);
 
   const { data: analytics } = useQuery({
-    queryKey: ["admin", "analytics"],
-    queryFn: async () => {
-      const [
-        { count: totalUsers },
-        { count: totalProducts },
-        { count: pendingReports },
-        { count: bannedUsers },
-        { count: suspicious },
-      ] = await Promise.all([
-        supabase.from("profiles").select("*", { count: "exact", head: true }),
-        supabase.from("product_listings" as never).select("*", { count: "exact", head: true }),
-        supabase
-          .from("reports" as never)
-          .select("*", { count: "exact", head: true })
-          .eq("status", "pending"),
-        supabase
-          .from("profiles")
-          .select("*", { count: "exact", head: true })
-          .eq("status", "banned"),
-        supabase
-          .from("suspicious_flags" as never)
-          .select("*", { count: "exact", head: true })
-          .eq("resolved", false),
-      ]);
-      return {
-        totalUsers: totalUsers ?? 0,
-        totalProducts: totalProducts ?? 0,
-        pendingReports: pendingReports ?? 0,
-        bannedUsers: bannedUsers ?? 0,
-        suspicious: suspicious ?? 0,
-      };
-    },
-    enabled: isAdmin,
-    refetchInterval: 5000,
-  });
-
+  queryKey: ["admin", "analytics"],
+  staleTime: 0,
+  queryFn: async () => {
+    const [
+      { count: totalUsers },
+      { count: totalProducts },
+      { count: pendingReports },
+      { count: bannedUsers },
+      { count: suspicious },
+      { data: viewStats },
+    ] = await Promise.all([
+      supabase.from("profiles").select("*", { count: "exact", head: true }),
+      supabase.from("product_listings" as never).select("*", { count: "exact", head: true }),
+      supabase.from("reports" as never).select("*", { count: "exact", head: true }).eq("status", "pending"),
+      supabase.from("profiles").select("*", { count: "exact", head: true }).eq("status", "banned"),
+      supabase.from("suspicious_flags" as never).select("*", { count: "exact", head: true }).eq("resolved", false),
+      supabase.rpc("get_view_stats" as never),
+    ]);
+    console.log("[ADMIN analytics] viewStats raw:", viewStats, typeof viewStats);
+    return {
+      totalUsers: totalUsers ?? 0,
+      totalProducts: totalProducts ?? 0,
+      pendingReports: pendingReports ?? 0,
+      bannedUsers: bannedUsers ?? 0,
+      suspicious: suspicious ?? 0,
+      totalViews: Array.isArray(viewStats) 
+  ? ((viewStats[0] as any)?.total_views ?? 0)
+  : ((viewStats as any)?.total_views ?? 0),
+uniqueViews: Array.isArray(viewStats)
+  ? ((viewStats[0] as any)?.unique_views ?? 0)
+  : ((viewStats as any)?.unique_views ?? 0),
+    };
+  },
+  enabled: isAdmin,
+  refetchInterval: 5000,
+});
   const { data: reportsRaw } = useQuery({
     queryKey: ["admin", "reports"],
     queryFn: async () => {
@@ -670,6 +670,8 @@ const removeNotes = async (notesId: string) => {
             <StatCard label="Pending reports" value={analytics?.pendingReports ?? 0} />
             <StatCard label="Banned users" value={analytics?.bannedUsers ?? 0} />
             <StatCard label="Suspicious flags" value={analytics?.suspicious ?? 0} />
+            <StatCard label="Total views" value={analytics?.totalViews ?? 0} />
+            <StatCard label="Unique visitors" value={analytics?.uniqueViews ?? 0} />
           </div>
 
           <Card>

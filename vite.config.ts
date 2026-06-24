@@ -8,6 +8,12 @@ export default defineConfig({
     preview: {
       allowedHosts: true,
     },
+    build: {
+      minify: 'esbuild',
+    },
+    esbuild: {
+      drop: ['console', 'debugger'],
+    },
   },
   nitro: {
     preset: "netlify",

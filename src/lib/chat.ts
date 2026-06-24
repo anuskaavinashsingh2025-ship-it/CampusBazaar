@@ -957,11 +957,10 @@ if (productRequestError) {
   console.error("Product request update failed", productRequestError);
 }
 
-  const { error: productError } = await supabase
-  .from("product_listings")
-  .update({ status: "sold" })
-  .eq("id", conversation.context_id);
-
+  const { error: productError } = await supabase.rpc("complete_listing", {
+  p_listing_id: conversation.context_id,
+  p_listing_type: "product",
+});
 if (productError) {
   console.error("Product update failed", productError);
 }
@@ -976,11 +975,10 @@ if (rentalRequestError) {
   console.error("Rental request update failed", rentalRequestError);
 }
 
- const { error: rentalError } = await supabase
-  .from("rental_listings")
-  .update({ status: "rented_out" })
-  .eq("id", conversation.context_id);
-
+ const { error: rentalError } = await supabase.rpc("complete_listing", {
+  p_listing_id: conversation.context_id,
+  p_listing_type: "rental",
+});
 if (rentalError) {
   console.error("Rental update failed", rentalError);
 }
@@ -995,11 +993,11 @@ if (conversation.context_type === "food") {
   }
 
   // Try updating food_listings — will no-op if context_id is a food_request id
-  const { error: foodListingError } = await supabase
-    .from("food_listings")
-    .update({ status: "sold" })
-    .eq("id", conversation.context_id);
-  if (foodListingError) console.error("Food listing update failed", foodListingError);
+ const { error: foodListingError } = await supabase.rpc("complete_listing", {
+  p_listing_id: conversation.context_id,
+  p_listing_type: "food",
+});
+if (foodListingError) console.error("Food listing update failed", foodListingError);
 
   // Always try to mark food_request fulfilled — will no-op if context_id is a listing id
   const { error: foodRequestError } = await supabase
@@ -1375,11 +1373,16 @@ export async function completeConversationForRequest(input: {
   // Mark the associated request as fulfilled when conversation completes
   if (data && data.request_id) {
     if (input.contextType === "food") {
-      await supabase
-        .from("food_requests")
-        .update({ status: "fulfilled" })
-        .eq("id", data.request_id);
-    } else if (input.contextType === "notes") {
+  await supabase
+    .from("food_requests")
+    .update({ status: "fulfilled" })
+    .eq("id", data.request_id);
+  // Also mark the food listing as unavailable so it disappears from marketplace
+  await supabase
+    .from("food_listings")
+    .update({ status: "sold" })
+    .eq("id", input.contextId);
+} else if (input.contextType === "notes") {
       await supabase
         .from("notes_requests")
         .update({ status: "fulfilled" })

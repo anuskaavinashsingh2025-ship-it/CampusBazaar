@@ -326,7 +326,7 @@ function MarketplaceHome() {
       return data.rows.map((r) => ({
         id: r.id,
         title: r.title,
-        price: Number(r.rent_price_per_day),
+        rent_price_per_day: Number(r.rent_price_per_day),
         category: r.category,
         custom_category: r.custom_category,
         condition: r.condition,
@@ -409,7 +409,7 @@ function MarketplaceHome() {
       return data.rows.map((r) => ({
         id: r.id,
         title: r.title,
-        price: Number(r.daily_rental_price),
+        price: r.is_free ? 0 : Number(r.daily_rental_price ?? 0),
         category: r.category,
        
         condition: "",
@@ -457,20 +457,6 @@ function MarketplaceHome() {
     gcTime: 10 * 60 * 1000,
   });
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return products ?? [];
-    return (products ?? []).filter((p) => {
-      const category =
-        p.category === "Others" && p.custom_category ? p.custom_category : p.category;
-      return (
-        p.title.toLowerCase().includes(q) ||
-        category.toLowerCase().includes(q) ||
-        p.condition.toLowerCase().includes(q) ||
-        p.seller.display_name.toLowerCase().includes(q)
-      );
-    });
-  }, [products, query]);
 
   // Compute the items to show for the Fresh recommendations area.
   // On the home page preview we cap at 8 items — users click "View all" for the full list.
@@ -478,24 +464,50 @@ function MarketplaceHome() {
 const HOME_PREVIEW_LIMIT = isMobile ? 6 : 8;;
 
   const itemsToShow = useMemo(() => {
-    if (isLoading) return [] as ProductCardModel[];
-    // If a category is selected, pick the correct dataset:
-    // - Food -> foodRecs
-    // - Rent -> rentalRecs
-    // - Notes -> notesRecs
-    // - otherwise -> products filtered by that category
-    if (selectedCategory) {
-      if (selectedCategory === "Food") return foodRecs as unknown as ProductCardModel[];
-      if (selectedCategory === "Rent") return rentalRecs as unknown as ProductCardModel[];
-      if (selectedCategory === "Notes") return notesRecs as unknown as ProductCardModel[];
-      return (products ?? []).filter((p) => {
-        const category =
-          p.category === "Others" && p.custom_category ? p.custom_category : p.category;
-        return category === selectedCategory;
-      });
-    }
-    return filtered;
-  }, [isLoading, selectedCategory, foodRecs, rentalRecs, notesRecs, products, filtered]);
+  if (isLoading) return [] as ProductCardModel[];
+
+  if (selectedCategory) {
+    if (selectedCategory === "Food") return foodRecs as unknown as ProductCardModel[];
+    if (selectedCategory === "Rent") return rentalRecs as unknown as ProductCardModel[];
+    if (selectedCategory === "Notes") return notesRecs as unknown as ProductCardModel[];
+    return (products ?? []).filter((p) => {
+      const category =
+        p.category === "Others" && p.custom_category ? p.custom_category : p.category;
+      return category === selectedCategory;
+    });
+  }
+
+  // No category selected
+  const q = query.trim().toLowerCase();
+  if (!q) {
+    // No search query → show products as before
+    return products ?? [];
+  }
+
+  // Search query → search across ALL listing types
+  const matchProduct = (p: ProductCardModel) => {
+    const category =
+      p.category === "Others" && p.custom_category ? p.custom_category : p.category;
+    return (
+      p.title.toLowerCase().includes(q) ||
+      category.toLowerCase().includes(q) ||
+      p.condition.toLowerCase().includes(q) ||
+      p.seller.display_name.toLowerCase().includes(q)
+    );
+  };
+
+  const matchSimple = (p: { title: string; category: string; seller: { display_name: string } }) =>
+    p.title.toLowerCase().includes(q) ||
+    p.category.toLowerCase().includes(q) ||
+    p.seller.display_name.toLowerCase().includes(q);
+
+  return [
+    ...(products ?? []).filter(matchProduct),
+    ...(foodRecs as unknown as ProductCardModel[]).filter(matchSimple),
+    ...(rentalRecs as unknown as ProductCardModel[]).filter(matchSimple),
+    ...(notesRecs as unknown as ProductCardModel[]).filter(matchSimple),
+  ];
+}, [isLoading, selectedCategory, foodRecs, rentalRecs, notesRecs, products, query]);
 
   const handleSell = () => {
     navigate({ to: "/upload-product" });

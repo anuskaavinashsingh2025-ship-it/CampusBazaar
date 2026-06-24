@@ -1,4 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import {
   Outlet,
   Link,
@@ -119,11 +120,31 @@ function RootShell({ children }: { children: ReactNode }) {
     </html>
   );
 }
+function usePageTracking() {
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  useEffect(() => {
+    // Get or create a session ID
+    let sessionId = sessionStorage.getItem("cb_session_id");
+    if (!sessionId) {
+      sessionId = crypto.randomUUID();
+      sessionStorage.setItem("cb_session_id", sessionId);
+    }
+    // Get current user if logged in
+    supabase.auth.getUser().then(({ data }: { data: { user: { id: string } | null } }) => {
+      supabase.from("page_views" as never).insert({
+        path: pathname,
+        session_id: sessionId,
+        user_id: data.user?.id ?? null,
+      });
+    });
+  }, [pathname]);
+}
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const useAppLayout = !BARE_LAYOUT_PATHS.has(pathname);
+  usePageTracking();
 
   return (
     <QueryClientProvider client={queryClient}>

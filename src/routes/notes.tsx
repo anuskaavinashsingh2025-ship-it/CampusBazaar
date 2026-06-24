@@ -393,6 +393,13 @@ console.log(data, error);
   const formatInr = (amount: number) =>
     new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(amount);
 
+  const formatNotePrice = (l: NotesListingRow) => {
+  if (l.is_free) return "Free";
+  if (l.daily_rental_price == null) return "—";
+  const formatted = formatInr(Number(l.daily_rental_price));
+  return l.listing_type === "rent" ? `${formatted} / day` : formatted;
+};
+
   const urgencyBadge = (level: string) => {
     const l = level.toLowerCase();
     if (l.includes("urgent")) return { emoji: "🔴", label: "Urgent", className: "bg-red-50 text-red-700 border-red-200" };
@@ -606,11 +613,7 @@ console.log(data, error);
                           </div>
                           <div className="flex flex-wrap gap-2">
                             <Badge variant="secondary">{l.category}</Badge>
-                            <Badge variant="outline">
-                              {l.daily_rental_price != null
-                                ? `${formatInr(Number(l.daily_rental_price))} / day`
-                                : "—"}
-                            </Badge>
+                            <Badge variant="outline">{formatNotePrice(l)}</Badge>
                             {l.is_digital ? (
                               <Badge variant="outline">Digital</Badge>
                             ) : (
@@ -705,11 +708,7 @@ console.log(data, error);
                           </div>
                           <div className="flex flex-wrap gap-2">
                             <Badge variant="secondary">{l.category}</Badge>
-                            <Badge variant="outline">
-                              {l.daily_rental_price != null
-                                ? `${formatInr(Number(l.daily_rental_price))} / day`
-                                : "—"}
-                            </Badge>
+                           <Badge variant="outline">{formatNotePrice(l)}</Badge>
                           </div>
                         </div>
                       </CardContent>

@@ -141,7 +141,7 @@ export function ListingGallery({ images, alt, overlay }: ListingGalleryProps) {
                       onClick={() => openViewer(index)}
                       aria-label={`Open image ${index + 1} of ${imageCount}`}
                     >
-                      <img src={img.url} alt={alt} className="h-full w-full object-cover" />
+                      <img src={img.url} alt={alt} className="h-full w-full object-cover" loading="lazy" />
                     </button>
                   </CarouselItem>
                 ))}
@@ -227,7 +227,7 @@ export function ListingGallery({ images, alt, overlay }: ListingGalleryProps) {
                         onClick={() => setSelectedIndex(index)}
                         aria-label={`Show image ${index + 1} of ${imageCount}`}
                       >
-                        <img src={img.url} alt="" className="h-full w-full object-cover" />
+                        <img src={img.url} alt="" className="h-full w-full object-cover" loading="lazy" />
                       </button>
                     ))}
                   </div>

@@ -36,7 +36,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
 
 export const Route = createFileRoute("/_authenticated/profile")({
   head: () => ({
@@ -60,7 +60,6 @@ function UserProfilePage() {
   const [otherHostelBlock, setOtherHostelBlock] = useState("");
   const [roomNumber, setRoomNumber] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
-  const [email, setEmail] = useState("");
   const [avatarUrl, setAvatarUrl] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
@@ -74,7 +73,6 @@ function UserProfilePage() {
       setOtherHostelBlock(profile.hostel_block === "Other" ? (profile.hostel_block ?? "") : "");
       setRoomNumber(profile.room_number ?? "");
       setPhoneNumber(profile.phone_number ?? "");
-      setEmail(profile.email ?? "");
       setAvatarUrl(profile.avatar_url ?? "");
     }
   }, [profile]);
@@ -176,35 +174,26 @@ function UserProfilePage() {
       
       // Fetch notes purchase requests (pending/accepted)
       const { data: notesPurchases } = await supabase
-        .from("notes_purchases")
-        .select(`
-          id,
-          status,
-          created_at,
-          notes_id,
-          buyer_id,
-          seller_id,
-          conversation_id,
-          notes_listings!inner(title, category, custom_category)
-        `)
-        .or(`buyer_id.eq.${user.id},seller_id.eq.${user.id}`)
-        .in("status", ["pending", "accepted"]);
+  .from("notes_purchase_requests")
+  .select(`
+    id,
+    status,
+    created_at,
+    notes_listing_id,
+    buyer_id,
+    seller_id,
+    conversation_id,
+    notes_listings!inner(title, category, custom_category)
+  `)
+  .or(`buyer_id.eq.${user.id},seller_id.eq.${user.id}`)
+  .in("status", ["pending", "accepted"]);
+
+  const { data: notesMarketRequests } = await supabase
+  .from("notes_requests")
+  .select("id, subject, status, created_at, requester_id, request_type")
+  .eq("requester_id", user.id)
+  .in("status", ["open"]);
       
-      // Fetch notes rental requests (pending/accepted/active_rental/return_requested)
-      const { data: notesRentals } = await supabase
-        .from("notes_rentals")
-        .select(`
-          id,
-          status,
-          created_at,
-          notes_id,
-          buyer_id,
-          seller_id,
-          conversation_id,
-          notes_listings!inner(title, category, custom_category)
-        `)
-        .or(`buyer_id.eq.${user.id},seller_id.eq.${user.id}`)
-        .in("status", ["pending", "accepted", "active_rental", "return_requested"]);
       
       // Fetch food orders (pending/accepted)
       const { data: foodOrders } = await supabase
@@ -224,9 +213,9 @@ function UserProfilePage() {
       
       // Fetch counterparty names
       const userIds = new Set<string>();
-      [...(productRequests ?? []), ...(rentalRequests ?? []), ...(notesPurchases ?? []), ...(notesRentals ?? []), ...(foodOrders ?? [])].forEach((req: any) => {
-        userIds.add(req.buyer_id);
-        userIds.add(req.seller_id);
+      [...(productRequests ?? []), ...(rentalRequests ?? []), ...(notesPurchases ?? []), ...(foodOrders ?? [])].forEach((req: any) => {
+        if (req.buyer_id) userIds.add(req.buyer_id);
+        if (req.seller_id) userIds.add(req.seller_id);
       });
       
       const { data: profiles } = await supabase
@@ -255,19 +244,23 @@ function UserProfilePage() {
           imageUrl: rentalImageMap.get(r.rental_id),
         })),
         ...(notesPurchases ?? []).map((r: any) => ({
-          ...r,
-          type: "notes_purchase",
-          title: r.notes_listings.title,
-          category: r.notes_listings.category || r.notes_listings.custom_category,
-          counterpartyId: r.buyer_id === user.id ? r.seller_id : r.buyer_id,
-        })),
-        ...(notesRentals ?? []).map((r: any) => ({
-          ...r,
-          type: "notes_rental",
-          title: r.notes_listings.title,
-          category: r.notes_listings.category || r.notes_listings.custom_category,
-          counterpartyId: r.buyer_id === user.id ? r.seller_id : r.buyer_id,
-        })),
+  ...r,
+  type: "notes_purchase",
+  title: r.notes_listings.title,
+  category: r.notes_listings.category || r.notes_listings.custom_category,
+  counterpartyId: r.buyer_id === user.id ? r.seller_id : r.buyer_id,
+})),
+...(notesMarketRequests ?? []).map((r: any) => ({
+  ...r,
+  type: "notes_request",
+  title: r.subject,
+  category: r.request_type,
+  counterpartyId: null,
+  completionDate: r.updated_at,
+  rating: null,
+  imageUrl: null,
+})),
+       
         ...(foodOrders ?? []).map((r: any) => ({
           ...r,
           type: "food",
@@ -281,229 +274,6 @@ function UserProfilePage() {
         ...order,
         counterpartyName: profileMap.get(order.counterpartyId) || "Unknown",
       })).sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-    },
-    enabled: Boolean(user?.id),
-  });
-
-  // Fetch Order History (completed transactions)
-  const { data: orderHistory = [], isLoading: loadingOrderHistory } = useQuery({
-    queryKey: ["order_history", user?.id],
-    queryFn: async () => {
-      if (!user?.id) return [];
-      
-      console.log("Fetching Order History for user:", user.id);
-      
-      // Fetch completed product requests
-      const { data: productRequests } = await supabase
-        .from("product_requests")
-        .select(`
-          id,
-          status,
-          created_at,
-          updated_at,
-          product_id,
-          buyer_id,
-          seller_id,
-          conversation_id,
-          product_listings!inner(title, category, custom_category)
-        `)
-        .or(`buyer_id.eq.${user.id},seller_id.eq.${user.id}`)
-        .in("status", ["completed", "sold"]);
-      
-      console.log("Product requests (completed/sold):", productRequests?.length || 0);
-      
-      // Fetch product images
-      const productIds = [...new Set((productRequests ?? []).map((r: any) => r.product_id))];
-      const { data: productImages } = await supabase
-        .from("product_images")
-        .select("product_id, storage_path")
-        .in("product_id", productIds);
-      const productImageMap = new Map((productImages ?? []).map((img: any) => [img.product_id, img.storage_path]));
-      
-      // Fetch completed rental requests
-      const { data: rentalRequests } = await supabase
-        .from("rental_requests")
-        .select(`
-          id,
-          status,
-          created_at,
-          updated_at,
-          rental_id,
-          buyer_id,
-          seller_id,
-          conversation_id,
-          rental_listings!inner(title, category, custom_category)
-        `)
-        .or(`buyer_id.eq.${user.id},seller_id.eq.${user.id}`)
-        .in("status", ["completed", "returned"]);
-      
-      console.log("Rental requests (completed/returned):", rentalRequests?.length || 0);
-      
-      // Fetch rental images
-      const rentalImageIds = [...new Set((rentalRequests ?? []).map((r: any) => r.rental_id))];
-      const { data: rentalImages } = await supabase
-        .from("rental_images")
-        .select("rental_id, storage_path")
-        .in("rental_id", rentalImageIds);
-      const rentalImageMap = new Map((rentalImages ?? []).map((img: any) => [img.rental_id, img.storage_path]));
-      
-      // Fetch completed notes purchase requests (FIXED: notes_purchase_requests not notes_purchases)
-      const { data: notesPurchases } = await supabase
-        .from("notes_purchase_requests")
-        .select(`
-          id,
-          status,
-          created_at,
-          updated_at,
-          notes_listing_id,
-          buyer_id,
-          seller_id,
-          conversation_id,
-          notes_listings!inner(title, category, custom_category)
-        `)
-        .or(`buyer_id.eq.${user.id},seller_id.eq.${user.id}`)
-        .in("status", ["completed"]);
-      
-      console.log("Notes purchase requests (completed):", notesPurchases?.length || 0);
-      
-      // Fetch completed notes rentals
-      const { data: notesRentals } = await supabase
-        .from("notes_rentals")
-        .select(`
-          id,
-          status,
-          created_at,
-          updated_at,
-          notes_listing_id,
-          buyer_id,
-          seller_id,
-          conversation_id,
-          notes_listings!inner(title, category, custom_category)
-        `)
-        .or(`buyer_id.eq.${user.id},seller_id.eq.${user.id}`)
-        .in("status", ["completed", "returned"]);
-      
-      console.log("Notes rentals (completed/returned):", notesRentals?.length || 0);
-      
-      // Fetch completed food orders
-      const { data: foodOrders } = await supabase
-        .from("food_orders")
-        .select(`
-          id,
-          status,
-          created_at,
-          updated_at,
-          food_listing_id,
-          buyer_id,
-          seller_id,
-          conversation_id,
-          food_listings!inner(title, category, custom_category)
-        `)
-        .or(`buyer_id.eq.${user.id},seller_id.eq.${user.id}`)
-        .in("status", ["completed", "sold", "fulfilled"]);
-      
-      console.log("Food orders (completed/sold/fulfilled):", foodOrders?.length || 0);
-      
-      // Fetch counterparty names
-      const userIds = new Set<string>();
-      [...(productRequests ?? []), ...(rentalRequests ?? []), ...(notesPurchases ?? []), ...(notesRentals ?? []), ...(foodOrders ?? [])].forEach((req: any) => {
-        userIds.add(req.buyer_id);
-        userIds.add(req.seller_id);
-      });
-      
-      const { data: profiles } = await supabase
-        .from("profiles")
-        .select("id, full_name")
-        .in("id", Array.from(userIds));
-      
-      const profileMap = new Map((profiles ?? []).map((p: any) => [p.id, p.full_name]));
-      
-      // Fetch rating information for all conversations
-      const allConversationIds = [
-        ...(productRequests ?? []).map((r: any) => r.conversation_id),
-        ...(rentalRequests ?? []).map((r: any) => r.conversation_id),
-        ...(notesPurchases ?? []).map((r: any) => r.conversation_id),
-        ...(notesRentals ?? []).map((r: any) => r.conversation_id),
-        ...(foodOrders ?? []).map((r: any) => r.conversation_id),
-      ].filter(Boolean);
-      
-      const { data: ratings } = await supabase
-        .from("conversation_ratings")
-        .select("conversation_id, rating, review")
-        .in("conversation_id", allConversationIds);
-      
-      const ratingMap = new Map((ratings ?? []).map((r: any) => [r.conversation_id, { rating: r.rating, review: r.review }]));
-      
-      // Fetch rental duration and returned date for rentals
-      const rentalIds = [...new Set((rentalRequests ?? []).map((r: any) => r.rental_id))];
-      const { data: rentalDetails } = await supabase
-        .from("rental_listings")
-        .select("id, rental_duration")
-        .in("id", rentalIds);
-      const rentalDurationMap = new Map((rentalDetails ?? []).map((r: any) => [r.id, r.rental_duration]));
-      
-      // Transform and combine all orders
-      const orders = [
-        ...(productRequests ?? []).map((r: any) => ({
-          ...r,
-          type: "product",
-          title: r.product_listings.title,
-          category: r.product_listings.category || r.product_listings.custom_category,
-          counterpartyId: r.buyer_id === user.id ? r.seller_id : r.buyer_id,
-          imageUrl: productImageMap.get(r.product_id),
-          completionDate: r.updated_at,
-          rating: ratingMap.get(r.conversation_id),
-        })),
-        ...(rentalRequests ?? []).map((r: any) => ({
-          ...r,
-          type: "rental",
-          title: r.rental_listings.title,
-          category: r.rental_listings.category || r.rental_listings.custom_category,
-          counterpartyId: r.buyer_id === user.id ? r.seller_id : r.buyer_id,
-          imageUrl: rentalImageMap.get(r.rental_id),
-          completionDate: r.updated_at,
-          rating: ratingMap.get(r.conversation_id),
-          rentalDuration: rentalDurationMap.get(r.rental_id),
-        })),
-        ...(notesPurchases ?? []).map((r: any) => ({
-          ...r,
-          type: "notes_purchase",
-          title: r.notes_listings.title,
-          category: r.notes_listings.category || r.notes_listings.custom_category,
-          counterpartyId: r.buyer_id === user.id ? r.seller_id : r.buyer_id,
-          completionDate: r.updated_at,
-          rating: ratingMap.get(r.conversation_id),
-        })),
-        ...(notesRentals ?? []).map((r: any) => ({
-          ...r,
-          type: "notes_rental",
-          title: r.notes_listings.title,
-          category: r.notes_listings.category || r.notes_listings.custom_category,
-          counterpartyId: r.buyer_id === user.id ? r.seller_id : r.buyer_id,
-          completionDate: r.updated_at,
-          rating: ratingMap.get(r.conversation_id),
-        })),
-        ...(foodOrders ?? []).map((r: any) => ({
-          ...r,
-          type: "food",
-          title: r.food_listings.title,
-          category: r.food_listings.category || r.food_listings.custom_category,
-          counterpartyId: r.buyer_id === user.id ? r.seller_id : r.buyer_id,
-          completionDate: r.updated_at,
-          rating: ratingMap.get(r.conversation_id),
-        })),
-      ];
-      
-      console.log("Total merged orders before sorting:", orders.length);
-      
-      const finalOrders = orders.map((order: any) => ({
-        ...order,
-        counterpartyName: profileMap.get(order.counterpartyId) || "Unknown",
-      })).sort((a: any, b: any) => new Date(b.completionDate || b.created_at).getTime() - new Date(a.completionDate || a.created_at).getTime());
-      
-      console.log("Final order history count:", finalOrders.length);
-      
-      return finalOrders;
     },
     enabled: Boolean(user?.id),
   });
@@ -738,10 +508,10 @@ function UserProfilePage() {
                   )}
                 </Link>
               ) : link.action ? (
-                <button
-                  onClick={link.action}
-                  className="flex flex-col items-center gap-2 rounded-xl border p-4 text-center transition-colors hover:bg-muted/50"
-                >
+  <button
+    onClick={link.action}
+    className="flex w-full flex-col items-center gap-2 rounded-xl border p-4 text-center transition-colors hover:bg-muted/50"
+  >
                   <link.icon className="h-6 w-6 text-primary" />
                   <span className="text-sm font-medium">{link.label}</span>
                   {link.count != null && link.count > 0 && (
@@ -887,222 +657,70 @@ function UserProfilePage() {
       </Dialog>
 
       <Dialog open={ordersOpen} onOpenChange={setOrdersOpen}>
-        <DialogContent className="max-w-4xl max-h-[80vh]">
-          <DialogHeader>
-            <DialogTitle>My Orders</DialogTitle>
-          </DialogHeader>
-          <Tabs defaultValue="active" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="active">Active Orders</TabsTrigger>
-              <TabsTrigger value="history">Order History</TabsTrigger>
-            </TabsList>
-            <TabsContent value="active" className="mt-4">
-              {loadingActiveOrders ? (
-                <div className="flex justify-center py-8">
-                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+  <DialogContent className="max-w-2xl max-h-[80vh]">
+    <DialogHeader>
+      <DialogTitle>My Orders</DialogTitle>
+      <DialogDescription>Your active purchases and rentals</DialogDescription>
+    </DialogHeader>
+    {loadingActiveOrders ? (
+      <div className="flex justify-center py-8">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    ) : activeOrders.length === 0 ? (
+      <div className="py-8 text-center text-muted-foreground">
+        No active orders
+      </div>
+    ) : (
+      <div className="space-y-3 max-h-[60vh] overflow-y-auto">
+        {activeOrders.map((order: any) => (
+          <Card key={order.id} className="overflow-hidden">
+            <CardContent className="p-0">
+              <div className="flex gap-4 p-4">
+                <div className="h-16 w-16 shrink-0 rounded-lg bg-muted overflow-hidden">
+                  {order.imageUrl ? (
+                    <img src={order.imageUrl} alt={order.title} className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center">
+                      <Package className="h-6 w-6 text-muted-foreground" />
+                    </div>
+                  )}
                 </div>
-              ) : activeOrders.length === 0 ? (
-                <div className="py-8 text-center text-muted-foreground">
-                  No active orders
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <h3 className="font-semibold truncate text-sm">{order.title}</h3>
+                    <Badge variant="secondary" className="text-xs shrink-0">{order.category}</Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground mb-2">
+                    {order.counterpartyName} · {new Date(order.created_at).toLocaleDateString()}
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <Badge className={
+                      order.status === "pending" ? "bg-yellow-500 hover:bg-yellow-600" :
+                      order.status === "accepted" ? "bg-green-500 hover:bg-green-600" :
+                      order.status === "active_rental" ? "bg-blue-500 hover:bg-blue-600" :
+                      order.status === "return_requested" ? "bg-orange-500 hover:bg-orange-600" :
+                      "bg-gray-500 hover:bg-gray-600"
+                    }>
+                      {order.status === "active_rental" ? "Active Rental" : order.status.replace(/_/g, " ")}
+                    </Badge>
+                    {order.conversation_id && (
+                      <Button size="sm" variant="outline" asChild>
+                        <Link to="/chats/$id" params={{ id: order.conversation_id }}>
+                          <MessageSquare className="h-3 w-3 mr-1" />
+                          Chat
+                        </Link>
+                      </Button>
+                    )}
+                  </div>
                 </div>
-              ) : (
-                <div className="space-y-3 max-h-[60vh] overflow-y-auto">
-                  {activeOrders.map((order: any) => (
-                    <Card key={order.id} className="overflow-hidden">
-                      <CardContent className="p-0">
-                        <div className="flex gap-4 p-4">
-                          {/* Listing image thumbnail */}
-                          <div className="h-20 w-20 shrink-0 rounded-lg bg-muted overflow-hidden">
-                            {order.imageUrl ? (
-                              <img
-                                src={order.imageUrl}
-                                alt={order.title}
-                                className="h-full w-full object-cover"
-                              />
-                            ) : (
-                              <div className="flex h-full w-full items-center justify-center">
-                                <Package className="h-8 w-8 text-muted-foreground" />
-                              </div>
-                            )}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            {/* Top Row: Title and category */}
-                            <div className="flex items-center gap-2 mb-2">
-                              <h3 className="font-semibold truncate">{order.title}</h3>
-                              <Badge variant="secondary" className="text-xs shrink-0">
-                                {order.category}
-                              </Badge>
-                            </div>
-                            {/* Middle Row: Counterparty and date */}
-                            <div className="flex items-center gap-4 text-sm text-muted-foreground mb-3">
-                              <span className="truncate">{order.counterpartyName}</span>
-                              <span className="shrink-0">{new Date(order.created_at).toLocaleDateString()}</span>
-                            </div>
-                            {/* Bottom Row: Status and buttons */}
-                            <div className="flex items-center gap-2">
-                              <Badge
-                                className={
-                                  order.status === "pending"
-                                    ? "bg-yellow-500 hover:bg-yellow-600"
-                                    : order.status === "accepted"
-                                      ? "bg-green-500 hover:bg-green-600"
-                                      : order.status === "active_rental"
-                                        ? "bg-blue-500 hover:bg-blue-600"
-                                        : order.status === "return_requested"
-                                          ? "bg-orange-500 hover:bg-orange-600"
-                                          : "bg-gray-500 hover:bg-gray-600"
-                                }
-                              >
-                                {order.status === "active_rental" ? "Active" : order.status.replace(/_/g, " ")}
-                              </Badge>
-                              {order.conversation_id && (
-                                <Button size="sm" variant="outline" asChild>
-                                  <Link to="/chats/$id" params={{ id: order.conversation_id }}>
-                                    <MessageSquare className="h-4 w-4 mr-1" />
-                                    Chat
-                                  </Link>
-                                </Button>
-                              )}
-                              <Button size="sm" variant="ghost">
-                                View Details
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              )}
-            </TabsContent>
-            <TabsContent value="history" className="mt-4">
-              {loadingOrderHistory ? (
-                <div className="flex justify-center py-8">
-                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                </div>
-              ) : orderHistory.length === 0 ? (
-                <div className="py-8 text-center text-muted-foreground">
-                  No order history
-                </div>
-              ) : (
-                <div className="space-y-3 max-h-[60vh] overflow-y-auto">
-                  {orderHistory.map((order: any) => (
-                    <Card key={order.id} className="overflow-hidden">
-                      <CardContent className="p-0">
-                        <div className="flex gap-4 p-4">
-                          {/* Listing image thumbnail */}
-                          <div className="h-20 w-20 shrink-0 rounded-lg bg-muted overflow-hidden">
-                            {order.imageUrl ? (
-                              <img
-                                src={order.imageUrl}
-                                alt={order.title}
-                                className="h-full w-full object-cover"
-                              />
-                            ) : (
-                              <div className="flex h-full w-full items-center justify-center">
-                                <Package className="h-8 w-8 text-muted-foreground" />
-                              </div>
-                            )}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            {/* Top Row: Title, category, and type badge */}
-                            <div className="flex items-center gap-2 mb-2">
-                              <h3 className="font-semibold truncate">{order.title}</h3>
-                              <Badge variant="secondary" className="text-xs shrink-0">
-                                {order.category}
-                              </Badge>
-                              {order.type === "notes_purchase" && (
-                                <Badge variant="outline" className="text-xs shrink-0">
-                                  Purchase
-                                </Badge>
-                              )}
-                              {order.type === "notes_rental" && (
-                                <Badge variant="outline" className="text-xs shrink-0">
-                                  Rental
-                                </Badge>
-                              )}
-                              {order.type === "food" && (
-                                <Badge variant="outline" className="text-xs shrink-0">
-                                  Delivered
-                                </Badge>
-                              )}
-                            </div>
-                            {/* Middle Row: Counterparty link and completion date */}
-                            <div className="flex items-center gap-4 text-sm text-muted-foreground mb-3">
-                              <Link
-                                to="/seller/$slug"
-                                params={{ slug: order.counterpartyId }}
-                                className="truncate hover:text-foreground hover:underline"
-                              >
-                                {order.counterpartyName}
-                              </Link>
-                              <span className="shrink-0 font-medium text-foreground">
-                                {order.type === "product" && order.status === "sold"
-                                  ? `Sold: ${new Date(order.completionDate || order.created_at).toLocaleDateString()}`
-                                  : order.type === "rental" && order.status === "returned"
-                                    ? `Returned: ${new Date(order.completionDate || order.created_at).toLocaleDateString()}`
-                                    : `Completed: ${new Date(order.completionDate || order.created_at).toLocaleDateString()}`}
-                              </span>
-                            </div>
-                            {/* Rental duration for rentals */}
-                            {order.type === "rental" && order.rentalDuration && (
-                              <div className="text-sm text-muted-foreground mb-3">
-                                Duration: {order.rentalDuration}
-                              </div>
-                            )}
-                            {/* Rating and review */}
-                            {order.rating && (
-                              <div className="mb-3">
-                                <div className="flex items-center gap-1 mb-1">
-                                  {[...Array(5)].map((_, i) => (
-                                    <Star
-                                      key={i}
-                                      className={`h-4 w-4 ${i < order.rating.rating ? "fill-yellow-400 text-yellow-400" : "text-gray-300"}`}
-                                    />
-                                  ))}
-                                  <span className="text-sm text-muted-foreground ml-1">{order.rating.rating}/5</span>
-                                </div>
-                                {order.rating.review && (
-                                  <p className="text-sm text-muted-foreground line-clamp-2">
-                                    {order.rating.review}
-                                  </p>
-                                )}
-                              </div>
-                            )}
-                            {/* Bottom Row: Status, rating badge, and buttons */}
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <Badge className="bg-gray-500 hover:bg-gray-600">
-                                {order.status === "returned" ? "Returned" : order.status === "sold" ? "Sold" : order.status === "fulfilled" ? "Fulfilled" : "Completed"}
-                              </Badge>
-                              <Badge
-                                variant={order.rating ? "default" : "outline"}
-                                className={order.rating ? "bg-emerald-500 hover:bg-emerald-600" : ""}
-                              >
-                                {order.rating ? "Rated" : "Not Rated Yet"}
-                              </Badge>
-                              {order.conversation_id && (
-                                <Button size="sm" variant="outline" asChild>
-                                  <Link to="/chats/$id" params={{ id: order.conversation_id }}>
-                                    <MessageSquare className="h-4 w-4 mr-1" />
-                                    Chat
-                                  </Link>
-                                </Button>
-                              )}
-                              <Button size="sm" variant="ghost">
-                                View Details
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              )}
-            </TabsContent>
-          </Tabs>
-        </DialogContent>
-      </Dialog>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    )}
+  </DialogContent>
+</Dialog>
     </div>
   );
 }

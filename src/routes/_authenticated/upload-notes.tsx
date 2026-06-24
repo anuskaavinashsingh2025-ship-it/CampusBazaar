@@ -120,8 +120,12 @@ function UploadNotesPage() {
       setSemester(String(data.semester ?? ""));
       setBranch(String(data.branch ?? ""));
       setIsDigital(Boolean(data.is_digital));
-      setIsFree(Boolean(data.is_free));
-      setDailyRentalPrice(String(data.daily_rental_price ?? ""));
+     setIsFree(Boolean(data.is_free));
+if (data.listing_type === "sell") {
+  setSellPrice(String(data.daily_rental_price ?? ""));
+} else {
+  setDailyRentalPrice(String(data.daily_rental_price ?? ""));
+}
       setRentalDurationDays(String(data.rental_duration_days ?? ""));
       setCondition((data.condition as any) ?? "Good");
 
@@ -151,7 +155,8 @@ function UploadNotesPage() {
   const [branch, setBranch] = useState("");
 
   const [isDigital, setIsDigital] = useState(true);
-  const [isFree, setIsFree] = useState(false);
+ const [isFree, setIsFree] = useState(false);
+const [sellPrice, setSellPrice] = useState<string>("");
 
   const [dailyRentalPrice, setDailyRentalPrice] = useState<string>("");
   const [rentalDurationDays, setRentalDurationDays] = useState<string>("");
@@ -174,7 +179,9 @@ function UploadNotesPage() {
     description.trim().length > 0 &&
     category.trim().length > 0 &&
     subject.trim().length > 0 &&
-    (type === "sell" || (Number(dailyRentalPrice) > 0 && Number(rentalDurationDays) > 0)) &&
+    (type === "sell"
+      ? isFree || Number(sellPrice) > 0
+      : Number(dailyRentalPrice) > 0 && Number(rentalDurationDays) > 0) &&
     previewImages.length >= 1;
 
   const handleSubmit = async (e: FormEvent) => {
@@ -203,7 +210,11 @@ function UploadNotesPage() {
         faculty: faculty.trim() || null,
         semester: semester.trim() || null,
         branch: branch.trim() || null,
-        daily_rental_price: type === "rent" ? Number(dailyRentalPrice) : null,
+        daily_rental_price: type === "rent"
+          ? Number(dailyRentalPrice)
+          : isFree
+          ? 0
+          : Number(sellPrice),
         rental_duration_days: type === "rent" ? Number(rentalDurationDays) : null,
         condition: type === "rent" ? condition : null,
         is_digital: isDigital,
@@ -233,9 +244,8 @@ function UploadNotesPage() {
       if (previewImages.length > 0) {
         console.log("[Notes Upload] Uploading images:", { count: previewImages.length, listingId });
         await supabase.from(NOTES_ASSETS_TABLE).delete().eq("listing_id", listingId as never);
-        const bucket = "notes-assets";
         const images = previewImages.slice(0, 5);
-        const uploadedPaths: string[] = [];
+      console.log("[Notes Upload] All images uploaded successfully:", images);
         
 
 // inside the loop:
@@ -251,7 +261,7 @@ for (let i = 0; i < images.length; i++) {
   } satisfies NotesAssetInsertable);
   if (imgMetaErr) throw imgMetaErr;
 }
-        console.log("[Notes Upload] All images uploaded successfully:", uploadedPaths);
+        console.log("[Notes Upload] All images uploaded successfully:", images);
       }
 
       await queryClient.invalidateQueries({ queryKey: ["notes"] });
@@ -374,27 +384,31 @@ for (let i = 0; i < images.length; i++) {
               </div>
 
               <div className="flex flex-wrap gap-6">
-                <div className="flex items-center gap-3">
-                  <Checkbox
-                    id="digital"
-                    checked={isDigital}
-                    onCheckedChange={(v) => setIsDigital(Boolean(v))}
-                  />
-                  <Label htmlFor="digital" className="cursor-pointer">
-                    Digital
-                  </Label>
-                </div>
-                <div className="flex items-center gap-3">
-                  <Checkbox
-                    id="free"
-                    checked={isFree}
-                    onCheckedChange={(v) => setIsFree(Boolean(v))}
-                  />
-                  <Label htmlFor="free" className="cursor-pointer">
-                    Free
-                  </Label>
-                </div>
-              </div>
+  <div className="flex items-center gap-3">
+    <Checkbox id="digital" checked={isDigital} onCheckedChange={(v) => setIsDigital(Boolean(v))} />
+    <Label htmlFor="digital" className="cursor-pointer">Digital</Label>
+  </div>
+  <div className="flex items-center gap-3">
+    <Checkbox id="free" checked={isFree} onCheckedChange={(v) => setIsFree(Boolean(v))} />
+    <Label htmlFor="free" className="cursor-pointer">Free</Label>
+  </div>
+</div>
+
+{type === "sell" && !isFree && (
+  <div className="space-y-2">
+    <Label htmlFor="sellPrice">Selling price (INR)</Label>
+    <Input
+      id="sellPrice"
+      type="number"
+      min={1}
+      step="0.01"
+      value={sellPrice}
+      onChange={(e) => setSellPrice(e.target.value)}
+      placeholder="e.g. 150"
+      required
+    />
+  </div>
+)}
 
               {type === "rent" && (
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">

@@ -2802,7 +2802,7 @@ function RequestCard({
       <CardContent className="space-y-3 p-4">
         <div className="flex gap-4">
           {coverUrl ? (
-            <img src={coverUrl} alt="" className="h-20 w-20 shrink-0 rounded-xl object-cover" />
+            <img src={coverUrl} alt="" className="h-20 w-20 shrink-0 rounded-xl object-cover" loading="lazy" />
           ) : (
             <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-xl bg-muted text-3xl">
               {getCategoryIcon(category || "product")}
@@ -2915,7 +2915,7 @@ function UnifiedRequestCard({
       <CardContent className="space-y-3 p-4">
         <div className="flex gap-4">
           {coverUrl ? (
-            <img src={coverUrl} alt="" className="h-20 w-20 shrink-0 rounded-xl object-cover" />
+            <img src={coverUrl} alt="" className="h-20 w-20 shrink-0 rounded-xl object-cover" loading="lazy" />
           ) : (
             <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-xl bg-muted text-xs text-muted-foreground">
               —
