@@ -527,25 +527,45 @@ console.log(data, error);
           </div>
         </section>
 
-        <div className="mb-3 grid grid-cols-3 gap-2">
-          <Button variant="outline" onClick={() => openDetailsForm("sell")}>
-            Sell details
-          </Button>
-          <Button variant="outline" onClick={() => openDetailsForm("rent")}>
-            Rent details
-          </Button>
-          <Button variant="outline" onClick={() => openDetailsForm("requests")}>
-            Request details
-          </Button>
-        </div>
 
-        <Tabs value={tab} onValueChange={(v) => { setTab(v as typeof tab); setVisibleCount(12); }}>
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="sell">Sell</TabsTrigger>
-            <TabsTrigger value="rent">Rent</TabsTrigger>
-            <TabsTrigger value="requests">Requests</TabsTrigger>
-          </TabsList>
+       <Tabs value={tab} onValueChange={(v) => { setTab(v as typeof tab); setVisibleCount(12); }}>
+  <div className="mb-3 flex items-center gap-2">
+  <TabsList className="flex-1 grid grid-cols-3">
+    <TabsTrigger value="sell">Sell</TabsTrigger>
+    <TabsTrigger value="rent">Rent</TabsTrigger>
+    <TabsTrigger value="requests">Requests</TabsTrigger>
+  </TabsList>
+</div>
 
+<div className="mb-4 grid grid-cols-3 gap-2">
+  <Button
+    size="sm"
+    variant="outline"
+    className="gap-1.5 text-xs border-orange-500 text-orange-500 hover:bg-orange-500/10"
+    onClick={() => openDetailsForm("sell")}
+  >
+    <Plus className="h-3.5 w-3.5" />
+    Sell Notes
+  </Button>
+  <Button
+    size="sm"
+    variant="outline"
+    className="gap-1.5 text-xs border-orange-500 text-orange-500 hover:bg-orange-500/10"
+    onClick={() => openDetailsForm("rent")}
+  >
+    <Plus className="h-3.5 w-3.5" />
+    Rent Notes
+  </Button>
+  <Button
+    size="sm"
+    variant="outline"
+    className="gap-1.5 text-xs border-orange-500 text-orange-500 hover:bg-orange-500/10"
+    onClick={() => openDetailsForm("requests")}
+  >
+    <Plus className="h-3.5 w-3.5" />
+    Request
+  </Button>
+</div>
           <TabsContent value="sell" className="mt-4">
             {loadingListings ? (
               <div className="flex justify-center py-16 text-muted-foreground">

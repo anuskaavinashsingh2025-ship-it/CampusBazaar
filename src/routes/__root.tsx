@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { ThemeProvider } from "../lib/theme";
 import {
   Outlet,
   Link,
@@ -123,17 +124,17 @@ function RootShell({ children }: { children: ReactNode }) {
 function usePageTracking() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   useEffect(() => {
-    // Get or create a session ID
-    let sessionId = sessionStorage.getItem("cb_session_id");
-    if (!sessionId) {
-      sessionId = crypto.randomUUID();
-      sessionStorage.setItem("cb_session_id", sessionId);
+    // Persistent visitor ID across sessions
+    let visitorId = localStorage.getItem("cb_visitor_id");
+    if (!visitorId) {
+      visitorId = crypto.randomUUID();
+      localStorage.setItem("cb_visitor_id", visitorId);
     }
-    // Get current user if logged in
+
     supabase.auth.getUser().then(({ data }: { data: { user: { id: string } | null } }) => {
       supabase.from("page_views" as never).insert({
         path: pathname,
-        session_id: sessionId,
+        session_id: visitorId,   // reuse existing column for now
         user_id: data.user?.id ?? null,
       });
     });
@@ -147,18 +148,20 @@ function RootComponent() {
   usePageTracking();
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <AuthPostLoginRedirect />
-        {useAppLayout ? (
-          <AppLayout>
+    <ThemeProvider>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <AuthPostLoginRedirect />
+          {useAppLayout ? (
+            <AppLayout>
+              <Outlet />
+            </AppLayout>
+          ) : (
             <Outlet />
-          </AppLayout>
-        ) : (
-          <Outlet />
-        )}
-        <Toaster />
-      </AuthProvider>
-    </QueryClientProvider>
+          )}
+          <Toaster />
+        </AuthProvider>
+      </QueryClientProvider>
+    </ThemeProvider>
   );
 }

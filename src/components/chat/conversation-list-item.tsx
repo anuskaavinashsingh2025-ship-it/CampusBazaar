@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
+import { useState, useEffect, useMemo } from "react";
 
-import { useMemo, useState, useEffect } from "react";
 
 import {
   formatChatTime,
@@ -123,7 +123,7 @@ export function ConversationListItemRow({
   const { user } = useAuth();
 
   const timestamp = getConversationTimestamp(conversation);
-
+  const [imageError, setImageError] = useState(false);
   const preview = getConversationPreview(conversation);
 
   const daysLeft = getDaysUntilDeletion(conversation.archived_at);
@@ -183,6 +183,7 @@ export function ConversationListItemRow({
         }
       } catch (error) {
         console.error("Error fetching listing image:", error);
+        setImageError(true);
       }
     }
 
@@ -205,17 +206,18 @@ export function ConversationListItemRow({
         >
           {/* Listing Image */}
           <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-muted sm:h-20 sm:w-20">
-            {listingImageUrl ? (
-              <img
-                src={listingImageUrl}
-                alt={conversation.listing_title}
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              <div className="flex h-full w-full items-center justify-center">
-                <CategoryBadge contextType={conversation.context_type} />
-              </div>
-            )}
+            {listingImageUrl && !imageError ? (
+  <img
+    src={listingImageUrl}
+    alt={conversation.listing_title}
+    className="h-full w-full object-cover"
+    onError={() => setImageError(true)}
+  />
+) : (
+  <div className="flex h-full w-full items-center justify-center">
+    <CategoryBadge contextType={conversation.context_type} />
+  </div>
+)}
           </div>
 
           {/* Content */}

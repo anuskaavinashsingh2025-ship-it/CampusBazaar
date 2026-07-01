@@ -372,12 +372,13 @@ export async function getOrCreateConversation(input: {
   );
 
   const { data: existing } = await supabase
-    .from(CONVERSATIONS_TABLE)
-    .select("id")
-    .eq("buyer_id", input.buyerId)
-    .eq("context_type", input.contextType)
-    .eq("context_id", input.contextId)
-    .maybeSingle();
+  .from(CONVERSATIONS_TABLE)
+  .select("id")
+  .eq("buyer_id", input.buyerId)
+  .eq("context_type", input.contextType)
+  .eq("context_id", input.contextId)
+.not("status", "in", "(completed,archived,auto_archived)")
+  .maybeSingle();
 
   console.log("[getOrCreateConversation] Existing conversation:", existing);
 
@@ -1023,12 +1024,11 @@ if (conversation.context_type === "notes") {
     if (notesRequestError) console.error("Notes purchase request update failed", notesRequestError);
 
     if (notesListing.listing_type !== "rent") {
-      const { error: notesError } = await supabase
-        .from("notes_listings")
-        .update({ status: "unavailable" })
-        .eq("id", conversation.context_id);
-      if (notesError) console.error("Notes listing update failed", notesError);
-    }
+  const { error: notesError } = await supabase.rpc("complete_notes_listing", {
+    p_listing_id: conversation.context_id,
+  });
+  if (notesError) console.error("Notes listing update failed", notesError);
+}
   } else {
     // This is a notes REQUEST chat — update notes_requests status
     const { error: notesMarketRequestError } = await supabase
@@ -1041,18 +1041,34 @@ if (conversation.context_type === "notes") {
      
       console.log("Completed conversation:", conversation);
     },
-    onSuccess: () => {
+    onSuccess: (_, conversationId) => {
+  // Core chat queries
   void queryClient.invalidateQueries({ queryKey: conversationsQueryKey(userId ?? null) });
+  void queryClient.invalidateQueries({ queryKey: ["conversation", conversationId] });
+  void queryClient.invalidateQueries({ queryKey: ["conversations"] }); // broadcast to all users
+
+  // Product & rental
+  void queryClient.invalidateQueries({ queryKey: ["product_listings"] });
+  void queryClient.invalidateQueries({ queryKey: ["products"] });
+  void queryClient.invalidateQueries({ queryKey: ["rental_listings"] });
+  void queryClient.invalidateQueries({ queryKey: ["rentals"] });
+  void queryClient.invalidateQueries({ queryKey: ["product_requests"] });
+  void queryClient.invalidateQueries({ queryKey: ["rental_requests"] });
+  void queryClient.invalidateQueries({ queryKey: ["marketplace_home"] });
+
+  // Notes
   void queryClient.invalidateQueries({ queryKey: ["notes_listing"] });
   void queryClient.invalidateQueries({ queryKey: ["notes", "listings"] });
   void queryClient.invalidateQueries({ queryKey: ["marketplace_home", "recommendations", "notes"] });
   void queryClient.invalidateQueries({ queryKey: ["notes_purchases"] });
-  // Invalidate food queries so listings/requests disappear immediately
+
+  // Food
   void queryClient.invalidateQueries({ queryKey: ["food_listings"] });
   void queryClient.invalidateQueries({ queryKey: ["food"] });
   void queryClient.invalidateQueries({ queryKey: ["marketplace_home", "recommendations", "food"] });
   void queryClient.invalidateQueries({ queryKey: ["food_requests"] });
-  toast.success("Transaction completed");
+
+  toast.success("Transaction completed! 🎉");
 },
   });
 }

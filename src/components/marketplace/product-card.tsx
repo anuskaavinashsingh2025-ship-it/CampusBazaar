@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { WishlistButton } from "@/components/wishlist/wishlist-button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { optimizedImage } from "@/lib/cloudinary-url";
 
 type SellerRef = {
   user_id: string;
@@ -77,11 +78,11 @@ export function ProductCard({
           <Link to={(linkTo ?? `/product/${product.id}`) as any} className="block">
             {product.coverImageUrl ? (
               <img
-                src={product.coverImageUrl}
-                alt={product.title}
-                className="h-40 w-full object-cover"
-                loading="lazy"
-              />
+  src={optimizedImage(product.coverImageUrl, 400)}
+  alt={product.title}
+  className="h-40 w-full object-cover"
+  loading="lazy"
+/>  
             ) : (
               <div className="flex h-40 w-full items-center justify-center bg-muted text-sm text-muted-foreground">
                 No image

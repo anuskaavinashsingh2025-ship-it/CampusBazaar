@@ -230,12 +230,24 @@ function NotificationsPage() {
 
       <div className="grid grid-cols-3 gap-3">
         {(
-          [
-            { key: "critical", icon: Shield, color: "border-red-200 bg-red-50" },
-            { key: "important", icon: Bell, color: "border-orange-200 bg-orange-50" },
-            { key: "informational", icon: Target, color: "border-blue-200 bg-blue-50" },
-          ] as const
-        ).map(({ key, icon: Icon, color }) => (
+  [
+    {
+      key: "critical",
+      icon: Shield,
+      color: "border-red-200 bg-red-50 dark:border-red-900/40 dark:bg-red-950/40",
+    },
+    {
+      key: "important",
+      icon: Bell,
+      color: "border-orange-200 bg-orange-50 dark:border-orange-900/40 dark:bg-orange-950/40",
+    },
+    {
+      key: "informational",
+      icon: Target,
+      color: "border-blue-200 bg-blue-50 dark:border-blue-900/40 dark:bg-blue-950/40",
+    },
+  ] as const
+).map(({ key, icon: Icon, color }) => (
           <Card key={key} className={cn("border", color)}>
             <CardContent className="flex items-center gap-3 p-4">
               <Icon className="h-5 w-5 text-muted-foreground" />

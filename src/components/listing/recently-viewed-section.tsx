@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
-
+import { cloudinaryThumb } from "@/lib/cloudinary-thumb";
 import { getRecentlyViewed, type RecentlyViewedItem } from "@/lib/recently-viewed";
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -33,13 +33,13 @@ export function RecentlyViewedSection({
             <Card className="w-36 overflow-hidden border-border/60">
               <CardContent className="p-0">
                 {item.coverUrl ? (
-                  <img
-                    src={item.coverUrl}
-                    alt={item.title}
-                    className="h-24 w-full object-cover"
-                    loading="lazy"
-                  />
-                ) : (
+  <img
+    src={cloudinaryThumb(item.coverUrl, { width: 144, height: 96 }) ?? item.coverUrl}
+    alt={item.title}
+    className="h-24 w-full object-cover"
+    loading="lazy"
+  />
+) : (
                   <div className="flex h-24 items-center justify-center bg-muted text-[10px] text-muted-foreground">
                     No image
                   </div>

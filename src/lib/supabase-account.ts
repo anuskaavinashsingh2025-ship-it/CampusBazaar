@@ -3,7 +3,9 @@ import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 
 export function isVitStudentEmail(email: string | undefined | null): boolean {
-  return Boolean(email && email.toLowerCase().endsWith("@vitstudent.ac.in"));
+  if (!email) return false;
+  const lowerEmail = email.toLowerCase();
+  return lowerEmail.endsWith("@vitstudent.ac.in") || lowerEmail.endsWith("@vit.ac.in");
 }
 
 function profileMeta(user: User) {

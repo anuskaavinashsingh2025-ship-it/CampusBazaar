@@ -404,7 +404,7 @@ function UploadProductPage() {
   }
 
   return (
-    <div className="-m-4 min-h-[calc(100vh-3.5rem)] bg-gradient-to-b from-slate-50 to-background sm:-m-6 lg:-m-8">
+<div className="-m-4 min-h-[calc(100vh-3.5rem)] bg-gradient-to-b from-muted to-background sm:-m-6 lg:-m-8">
       <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
         <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
@@ -797,16 +797,16 @@ function UploadProductPage() {
           </div>
 
           <aside className="space-y-4">
-            <Card className="border-sky-100 bg-sky-50/80 shadow-none">
-              <CardHeader className="pb-2">
-                <CardTitle className="flex items-center gap-2 text-base text-sky-900">
+            <Card className="border-sky-100 bg-sky-50/80 shadow-none dark:border-sky-900/40 dark:bg-sky-950/30">
+  <CardHeader className="pb-2">
+    <CardTitle className="flex items-center gap-2 text-base text-sky-900 dark:text-sky-300">
                   <Eye className="h-4 w-4" />
                   Preview
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 {title || imagePreviews[0] ? (
-                  <div className="overflow-hidden rounded-xl border bg-white">
+                  <div className="overflow-hidden rounded-xl border bg-card">
                     {imagePreviews[0] ? (
                       <img src={imagePreviews[0]} alt="" className="h-36 w-full object-cover" />
                     ) : (
@@ -832,7 +832,7 @@ function UploadProductPage() {
                     </div>
                   </div>
                 ) : (
-                  <div className="rounded-xl border border-dashed bg-white/60 p-6 text-center text-sm text-muted-foreground">
+<div className="rounded-xl border border-dashed bg-card/60 p-6 text-center text-sm text-muted-foreground">
                     Your item preview will appear here. Add details and photos to see how your
                     listing will look.
                   </div>
@@ -840,15 +840,15 @@ function UploadProductPage() {
               </CardContent>
             </Card>
 
-            <Card className="border-emerald-100 bg-emerald-50/80 shadow-none">
-              <CardHeader className="pb-2">
-                <CardTitle className="flex items-center gap-2 text-base text-emerald-900">
+            <Card className="border-emerald-100 bg-emerald-50/80 shadow-none dark:border-emerald-900/40 dark:bg-emerald-950/30">
+  <CardHeader className="pb-2">
+    <CardTitle className="flex items-center gap-2 text-base text-emerald-900 dark:text-emerald-300">
                   <Sparkles className="h-4 w-4" />
                   Tips for a Great Listing
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <ul className="space-y-2 text-sm text-emerald-900/80">
+<ul className="space-y-2 text-sm text-emerald-900/80 dark:text-emerald-200/80">
                   {[
                     "Add clear, well-lit photos",
                     "Write a detailed description",
@@ -865,12 +865,12 @@ function UploadProductPage() {
               </CardContent>
             </Card>
 
-            <Card className="border-sky-100 bg-sky-50/50 shadow-none">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base text-sky-900">Why sell on CampusBazar?</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3 text-sm">
-                {[
+            <Card className="border-sky-100 bg-sky-50/50 shadow-none dark:border-sky-900/40 dark:bg-sky-950/20">
+  <CardHeader className="pb-2">
+    <CardTitle className="text-base text-sky-900 dark:text-sky-300">Why sell on CampusBazar?</CardTitle>
+  </CardHeader>
+  <CardContent className="space-y-3 text-sm">
+    {[
                   { icon: Users, text: "Reach students near you" },
                   { icon: Zap, text: "Quick and easy process" },
                   { icon: Shield, text: "Trusted student community" },

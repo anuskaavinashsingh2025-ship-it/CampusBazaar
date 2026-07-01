@@ -16,6 +16,7 @@ import { bootstrapUserAccount } from "@/lib/supabase-account";
 import { saveLogin } from "@/lib/saved-login";
 import { checkBanStatus } from "@/lib/ban-enforcement";
 import { useNavigate } from "@tanstack/react-router";
+import { toast } from "sonner";
 
 export type Profile = Tables<"profiles">;
 export type AppRole = "user" | "admin";
@@ -55,6 +56,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
 
   const loadUserData = useCallback(async (authUser: User) => {
+    const email = authUser.email ?? "";
+    // Validate VIT email BEFORE any account creation
+    if (!email.endsWith("@vitstudent.ac.in") && !email.endsWith("@vit.ac.in")) {
+      await supabase.auth.signOut();
+      setProfile(null);
+      setRoles([]);
+      navigate({ to: "/login" as any, search: { error: "non_vit_email" } as any });
+      return;
+    }
     if (!bootstrapInFlight.current.has(authUser.id)) {
       bootstrapInFlight.current.add(authUser.id);
       try {
@@ -137,6 +147,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (error) {
         console.error("[Auth] getSession failed:", error);
+        if (error.message && !error.message.includes("refresh_token")) {
+          toast.error(error.message || "Sign-in failed. Only VIT email addresses are allowed.");
+        }
+      }
+      if (error?.message.includes('refresh_token')) {
+        await supabase.auth.signOut();
+        return;
       }
 
       if (cancelled) return;

@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { WishlistButton } from "@/components/wishlist/wishlist-button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { optimizedImage } from "@/lib/cloudinary-url";
 
 type SellerRef = {
   user_id: string;
@@ -72,7 +73,7 @@ export function RentalCard({
           <Link to="/rent/$id" params={{ id: rental.id }} className="block">
             {rental.coverImageUrl ? (
               <img
-                src={rental.coverImageUrl}
+                src={optimizedImage(rental.coverImageUrl, 400)}
                 alt={rental.title}
                 className="h-40 w-full object-cover"
                 loading="lazy"

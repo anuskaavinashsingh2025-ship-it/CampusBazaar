@@ -686,20 +686,20 @@ function AllRequestsTab({
       if (role === "seller" && req.status === "pending") {
         return (
           <div className="flex gap-2">
-            <Button className="flex-1 bg-emerald-600 hover:bg-emerald-700" onClick={() => handleProductAccept(req)}>
+            <Button className="flex-1 bg-emerald-600 hover:bg-emerald-700" onClick={() => handleProductAccept(req)} disabled={updateProduct.isPending}>
               Accept
             </Button>
-            <Button variant="destructive" className="flex-1" onClick={() => handleProductReject(req)}>
+            <Button variant="destructive" className="flex-1" onClick={() => handleProductReject(req)} disabled={updateProduct.isPending}>
               Reject
             </Button>
           </div>
         );
       }
       if (role === "seller" && req.status === "accepted") {
-        return <Button className="w-full" onClick={() => handleProductComplete(req)}>Mark Completed</Button>;
+        return <Button className="w-full" onClick={() => handleProductComplete(req)} disabled={updateProduct.isPending}>Mark Completed</Button>
       }
       if (req.status === "pending") {
-        return <Button variant="outline" className="w-full" onClick={() => handleProductCancel(req)}>Cancel Request</Button>;
+        return <Button variant="outline" className="w-full" onClick={() => handleProductCancel(req)} disabled={updateProduct.isPending}>Cancel Request</Button>
       }
     }
 
@@ -707,23 +707,23 @@ function AllRequestsTab({
       if (role === "seller" && req.status === "pending") {
         return (
           <div className="flex gap-2">
-            <Button className="flex-1 bg-emerald-600 hover:bg-emerald-700" onClick={() => handleRentalAccept(req)}>
+            <Button className="flex-1 bg-emerald-600 hover:bg-emerald-700" onClick={() => handleRentalAccept(req)} disabled={updateRental.isPending}>
               Accept
             </Button>
-            <Button variant="destructive" className="flex-1" onClick={() => handleRentalReject(req)}>
+            <Button variant="destructive" className="flex-1" onClick={() => handleRentalReject(req)} disabled={updateRental.isPending}>
               Reject
             </Button>
           </div>
         );
       }
       if (role === "seller" && req.status === "accepted") {
-        return <Button className="w-full" onClick={() => handleRentalMarkAsRentedOut(req)}>Mark as Rented Out</Button>;
+        return <Button className="w-full" onClick={() => handleRentalMarkAsRentedOut(req)} disabled={updateRental.isPending}>Mark as Rented Out</Button>;
       }
       if (role === "buyer" && req.status === "active_rental") {
-        return <Button className="w-full" onClick={() => handleRentalReturnItem(req)}>Returned Item</Button>;
+        return <Button className="w-full" onClick={() => handleRentalReturnItem(req)} disabled={updateRental.isPending}>Returned Item</Button>;
       }
       if (req.status === "pending") {
-        return <Button variant="outline" className="w-full" onClick={() => handleRentalCancel(req)}>Cancel Request</Button>;
+        return <Button variant="outline" className="w-full" onClick={() => handleRentalCancel(req)} disabled={updateRental.isPending}>Cancel Request</Button>;
       }
     }
 
@@ -731,20 +731,20 @@ function AllRequestsTab({
       if (role === "seller" && req.status === "pending") {
         return (
           <div className="flex gap-2">
-            <Button className="flex-1 bg-emerald-600 hover:bg-emerald-700" onClick={() => handleFoodAccept(req)}>
+            <Button className="flex-1 bg-emerald-600 hover:bg-emerald-700" onClick={() => handleFoodAccept(req)} disabled={updateFood.isPending}>
               Accept
             </Button>
-            <Button variant="destructive" className="flex-1" onClick={() => handleFoodReject(req)}>
+            <Button variant="destructive" className="flex-1" onClick={() => handleFoodReject(req)} disabled={updateFood.isPending}>
               Reject
             </Button>
           </div>
         );
       }
       if (role === "seller" && req.status === "accepted") {
-        return <Button className="w-full" onClick={() => handleFoodComplete(req)}>Mark Completed</Button>;
+        return <Button className="w-full" onClick={() => handleFoodComplete(req)} disabled={updateFood.isPending}>Mark Completed</Button>;
       }
       if (req.status === "pending") {
-        return <Button variant="outline" className="w-full" onClick={() => handleFoodCancel(req)}>Cancel</Button>;
+        return <Button variant="outline" className="w-full" onClick={() => handleFoodCancel(req)} disabled={updateFood.isPending}>Cancel</Button>;
       }
     }
 
@@ -752,10 +752,10 @@ function AllRequestsTab({
       if (role === "seller" && req.status === "pending") {
         return (
           <div className="flex gap-2">
-            <Button className="flex-1 bg-emerald-600 hover:bg-emerald-700" onClick={() => handleNotesPurchaseAccept(req)}>
+            <Button className="flex-1 bg-emerald-600 hover:bg-emerald-700" onClick={() => handleNotesPurchaseAccept(req)} disabled={updateNotesPurchase.isPending}>
               Accept
             </Button>
-            <Button variant="destructive" className="flex-1" onClick={() => handleNotesPurchaseReject(req)}>
+            <Button variant="destructive" className="flex-1" onClick={() => handleNotesPurchaseReject(req)} disabled={updateNotesPurchase.isPending}>
               Reject
             </Button>
           </div>
@@ -777,7 +777,7 @@ function AllRequestsTab({
   );
 }
       if (req.status === "pending") {
-        return <Button variant="outline" className="w-full" onClick={() => handleNotesPurchaseCancel(req)}>Cancel</Button>;
+        return <Button variant="outline" className="w-full" onClick={() => handleNotesPurchaseCancel(req)} disabled={updateNotesPurchase.isPending}>Cancel</Button>;
       }
     }
 
@@ -785,23 +785,23 @@ function AllRequestsTab({
       if (role === "seller" && req.status === "pending") {
         return (
           <div className="flex gap-2">
-            <Button className="flex-1 bg-emerald-600 hover:bg-emerald-700" onClick={() => handleNotesRentalAccept(req)}>
+            <Button className="flex-1 bg-emerald-600 hover:bg-emerald-700" onClick={() => handleNotesRentalAccept(req)} disabled={updateNotesRental.isPending}>
               Accept
             </Button>
-            <Button variant="destructive" className="flex-1" onClick={() => handleNotesRentalReject(req)}>
+            <Button variant="destructive" className="flex-1" onClick={() => handleNotesRentalReject(req)} disabled={updateNotesRental.isPending}>
               Reject
             </Button>
           </div>
         );
       }
       if (role === "seller" && req.status === "accepted") {
-        return <Button className="w-full" onClick={() => handleNotesRentalMarkAsRentedOut(req)}>Mark as Rented Out</Button>;
+        return <Button className="w-full" onClick={() => handleNotesRentalMarkAsRentedOut(req)} disabled={updateNotesRental.isPending}>Mark as Rented Out</Button>;
       }
       if (role === "buyer" && req.status === "active_rental") {
-        return <Button className="w-full" onClick={() => handleNotesRentalReturnItem(req)}>Returned Item</Button>;
+        return <Button className="w-full" onClick={() => handleNotesRentalReturnItem(req)} disabled={updateNotesRental.isPending}>Returned Item</Button>;
       }
       if (req.status === "pending") {
-        return <Button variant="outline" className="w-full" onClick={() => handleNotesRentalCancel(req)}>Cancel</Button>;
+        return <Button variant="outline" className="w-full" onClick={() => handleNotesRentalCancel(req)} disabled={updateNotesRental.isPending}>Cancel</Button>;
       }
     }
 

@@ -81,7 +81,13 @@ function SellerProfileEditPage() {
             is_profile_complete: true,
           });
       if (error) throw error;
+      const { error: sellerError } = await supabase
+        .from("seller_profiles")
+        .update({ display_name: fullName.trim() })
+        .eq("user_id", user.id);
+      if (sellerError) throw sellerError;
       await refreshProfile();
+      await queryClient.invalidateQueries({ queryKey: ["seller_for_product"] });
       // Invalidate seller-related queries so storefronts and cards pick up the new avatar
       await queryClient.invalidateQueries({ queryKey: ["seller_profile_self", user.id] });
       await queryClient.invalidateQueries({ queryKey: ["seller", profile?.id] });

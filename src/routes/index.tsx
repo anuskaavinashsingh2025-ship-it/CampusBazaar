@@ -13,7 +13,6 @@ import {
   Grid2X2,
   Mail,
   Linkedin,
-  Code,
   ExternalLink,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -842,12 +841,13 @@ const HOME_PREVIEW_LIMIT = isMobile ? 6 : 8;;
 
           {/* About Us Section */}
           <section>
-            <h2 className="text-base font-bold">About us</h2>
-            <p className="mt-3 text-sm text-muted-foreground">
-              CampusBazar is a VIT-only marketplace built for student life — buy and sell essentials
-              with verified students.
-            </p>
-          </section>
+  <h2 className="text-base font-bold">About us</h2>
+  <p className="mt-3 text-sm text-muted-foreground">
+    Why limit yourself to buying and selling? On CampusBazar, you can also rent out
+    things you're not using, request notes you're missing, or sell snacks at midnight
+    when everyone's hungry. All within a trusted, verified VIT-only community.
+  </p>
+</section>
 
           {/* Contact Us Section */}
           <section id="contact-us">
@@ -956,34 +956,11 @@ const HOME_PREVIEW_LIMIT = isMobile ? 6 : 8;;
               </div>
             </div>
           </section>
-
-          {/* Special Thanks To Section */}
-          <section>
-            <h2 className="text-base font-bold">Special Thanks To</h2>
-            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <div className="flex items-center gap-3 rounded-lg bg-muted/30 px-4 py-3">
-                <Code className="h-5 w-5 flex-shrink-0 text-orange-600" />
-                <span className="text-sm font-medium text-foreground">Chintala Keshav Karthik</span>
-              </div>
-              <div className="flex items-center gap-3 rounded-lg bg-muted/30 px-4 py-3">
-                <Code className="h-5 w-5 flex-shrink-0 text-orange-600" />
-                <span className="text-sm font-medium text-foreground">Sneha Kumari</span>
-              </div>
-              <div className="flex items-center gap-3 rounded-lg bg-muted/30 px-4 py-3">
-                <Code className="h-5 w-5 flex-shrink-0 text-orange-600" />
-                <span className="text-sm font-medium text-foreground">Sakshi Saraf</span>
-              </div>
-              <div className="flex items-center gap-3 rounded-lg bg-muted/30 px-4 py-3">
-                <Code className="h-5 w-5 flex-shrink-0 text-orange-600" />
-                <span className="text-sm font-medium text-foreground">Tejas Chandane</span>
-              </div>
-            </div>
-          </section>
         </div>
       </main>
 
       {/* Bottom navigation (mobile-first) */}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t bg-card/95 backdrop-blur">
+      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t bg-card/95 backdrop-blur md:hidden">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-2">
           <button
             type="button"

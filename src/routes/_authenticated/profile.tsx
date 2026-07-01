@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   BadgeCheck,
   Camera,
@@ -51,6 +51,7 @@ function formatMemberSince(iso: string | undefined) {
 }
 
 function UserProfilePage() {
+  const queryClient = useQueryClient();
   const { user, profile, loading, refreshProfile } = useAuth();
   const [editOpen, setEditOpen] = useState(false);
   const [ordersOpen, setOrdersOpen] = useState(false);
@@ -335,6 +336,7 @@ function UserProfilePage() {
         avatar_url: avatarUrl.trim() || null,
       };
       const { error } = profile
+      
         ? await supabase.from("profiles").update(payload).eq("id", user.id)
         : await supabase.from("profiles").insert({
             id: user.id,
@@ -343,7 +345,13 @@ function UserProfilePage() {
             is_profile_complete: true,
           });
       if (error) throw error;
+      const { error: sellerError } = await supabase
+        .from("seller_profiles")
+        .update({ display_name: fullName.trim() })
+        .eq("user_id", user.id);
+      if (sellerError) throw sellerError;
       await refreshProfile();
+      await queryClient.invalidateQueries({ queryKey: ["seller_for_product"] });
       toast.success("Profile saved");
       setEditOpen(false);
     } catch (err) {

@@ -10,7 +10,6 @@ import {
   Star,
   Home,
   Zap,
-  MoreVertical,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useState } from "react";
@@ -937,9 +936,6 @@ function SellerPage() {
                     >
                       <Share2 className="mr-2 h-4 w-4" />
                       Share Profile
-                    </Button>
-                    <Button variant="ghost" size="icon" aria-label="More options">
-                      <MoreVertical className="h-4 w-4" />
                     </Button>
                   </div>
                 </div>

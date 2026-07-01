@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState, useRef, type FormEvent } from "react";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -34,6 +34,7 @@ function CompleteProfilePage() {
   const [roomNumber, setRoomNumber] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const submittedRef = useRef(false);
 
   useEffect(() => {
     if (loading) return;
@@ -58,6 +59,11 @@ function CompleteProfilePage() {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!user) return;
+    if (submittedRef.current) {
+      console.warn("[CompleteProfile] Submission already in progress, ignoring duplicate");
+      return;
+    }
+    submittedRef.current = true;
     setSubmitting(true);
     try {
       await bootstrapUserAccount(user);
@@ -79,12 +85,18 @@ function CompleteProfilePage() {
             ...payload,
           });
       if (error) throw error;
+      const { error: sellerError } = await supabase
+        .from("seller_profiles")
+        .update({ display_name: fullName.trim() })
+        .eq("user_id", user.id);
+      if (sellerError) throw sellerError;
       await refreshProfile();
       toast.success("Profile completed!");
       navigate({ to: "/" });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not save profile";
       toast.error(message);
+      submittedRef.current = false; // Allow retry on error
     } finally {
       setSubmitting(false);
     }

@@ -14,13 +14,12 @@ const STORAGE_KEY = "cb_theme";
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(() => {
+    // Default to light mode, not system preference
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw === "light" || raw === "dark") return raw;
     } catch (e) {}
-    if (typeof window !== "undefined" && window.matchMedia) {
-      return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-    }
+    // Default to light mode for new users
     return "light";
   });
 
@@ -32,26 +31,6 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     if (theme === "dark") root.classList.add("dark");
     else root.classList.remove("dark");
   }, [theme]);
-
-  useEffect(() => {
-    // track system preference changes if user hasn't explicitly set theme
-    let mql: MediaQueryList | null = null;
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw && typeof window !== "undefined" && window.matchMedia) {
-        mql = window.matchMedia("(prefers-color-scheme: dark)");
-        const handler = (e: MediaQueryListEvent) => setThemeState(e.matches ? "dark" : "light");
-        if (mql.addEventListener) mql.addEventListener("change", handler);
-        else mql.addListener(handler);
-        return () => {
-          if (!mql) return;
-          if (mql.removeEventListener) mql.removeEventListener("change", handler);
-          else mql.removeListener(handler as any);
-        };
-      }
-    } catch (e) {}
-    return () => {};
-  }, []);
 
   const setTheme = (t: Theme) => setThemeState(t);
   const toggle = () => setThemeState((s) => (s === "dark" ? "light" : "dark"));

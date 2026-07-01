@@ -117,6 +117,10 @@ export async function fetchNotificationPreferences(
   return inserted as unknown as NotificationPreferences;
 }
 
+// REPLACE the existing createNotification function in src/lib/notifications.ts
+// (lines from `export async function createNotification` to its closing brace)
+// with this version. Everything else in the file stays identical.
+
 export async function createNotification(input: {
   userId: string;
   title: string;
@@ -126,30 +130,32 @@ export async function createNotification(input: {
   actionUrl?: string | null;
   metadata?: Record<string, unknown>;
 }) {
+  // Only check preferences when notifying yourself (e.g. system notifications).
+// For cross-user notifications (transactions), skip — we can't read another
+// user's preferences from the sender's session.
+const { data: { user } } = await supabase.auth.getUser();
+if (user && user.id === input.userId) {
   const prefs = await fetchNotificationPreferences(input.userId).catch(() => null);
   if (prefs) {
-    const moduleKey = input.module as keyof Pick<
-      NotificationPreferences,
-      "marketplace" | "rentals" | "notes" | "food" | "chats" | "requests" | "system"
-    >;
+    const moduleKey = input.module as keyof Pick<NotificationPreferences, "marketplace" | "rentals" | "notes" | "food" | "chats" | "requests" | "system">;
     if (!prefs[moduleKey]) return null;
   }
+}
 
- const { error } = await supabase
-  .from(NOTIFICATIONS_TABLE)
-  .insert({
-    user_id: input.userId,
-    title: input.title,
-    description: input.description,
-    priority: input.priority ?? "informational",
-    module: input.module,
-    action_url: input.actionUrl ?? null,
-    metadata: input.metadata ?? {},
+  // Use RPC instead of direct insert so the client never has a path
+  // to insert arbitrary notifications to arbitrary user_ids.
+  const { error } = await supabase.rpc("create_notification_for_user", {
+    p_receiver_id: input.userId,
+    p_title: input.title,
+    p_description: input.description,
+    p_priority: input.priority ?? "informational",
+    p_module: input.module,
+    p_action_url: input.actionUrl ?? null,
+    p_metadata: input.metadata ?? {},
   });
 
-const data = null;
   if (error) {
-    console.error("[Notification] Insert failed:", {
+    console.error("[Notification] RPC failed:", {
       error: error.message,
       code: error.code,
       details: error.details,

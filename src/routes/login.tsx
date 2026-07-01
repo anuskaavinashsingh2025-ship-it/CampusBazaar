@@ -16,6 +16,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { CampusBazarLogo } from "@/components/brand/campusbazar-logo";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export const Route = createFileRoute("/login")({
   head: () => ({
@@ -66,6 +67,26 @@ function LoginPage() {
   const [forgotPasswordMode, setForgotPasswordMode] = useState(false);
   const [forgotPasswordEmail, setForgotPasswordEmail] = useState("");
   const [forgotPasswordLoading, setForgotPasswordLoading] = useState(false);
+  const [blockedEmailError, setBlockedEmailError] = useState(false);
+
+  useEffect(() => {
+  const params = new URLSearchParams(window.location.search);
+  const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+
+  const errorCode = params.get("error") || hashParams.get("error");
+  const errorDescription = params.get("error_description") || hashParams.get("error_description");
+
+  if (errorCode === "non_vit_email") {
+    setBlockedEmailError(true);
+    window.history.replaceState({}, "", window.location.pathname);
+  } else if (errorCode) {
+    // Catches Supabase's own OAuth error redirect, e.g. when the
+    // Before-User-Created hook rejects a non-VIT Google account.
+    toast.error(errorDescription || "Sign-in was rejected: only VIT email addresses are allowed.");
+    setBlockedEmailError(true);
+    window.history.replaceState({}, "", window.location.pathname);
+  }
+}, []);
 
   useEffect(() => {
     setSavedLogins(getSavedLogins());
@@ -108,6 +129,10 @@ function LoginPage() {
     e.preventDefault();
     setSubmitting(true);
     try {
+      if (!email.endsWith("@vitstudent.ac.in") && !email.endsWith("@vit.ac.in")) {
+        toast.error("Only VIT email addresses are allowed.");
+        return;
+      }
       if (mode === "signin") {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
@@ -138,34 +163,25 @@ function LoginPage() {
   };
 
   const handleGoogle = async (savedEmail?: string) => {
-    setGoogleLoading(true);
-    try {
-      // Use Supabase client directly for OAuth. This will redirect the browser
-      // to Google's consent screen. Supabase is configured with
-      // detectSessionInUrl so the app will pick up the session on return.
-      const options: Record<string, unknown> = {
-        redirectTo: `${window.location.origin}/`,
-      };
-      if (savedEmail) options.queryParams = { login_hint: savedEmail };
+  setGoogleLoading(true);
+  try {
+    const options: Record<string, unknown> = {
+      redirectTo: `${window.location.origin}/login`,
+    };
+    if (savedEmail) options.queryParams = { login_hint: savedEmail };
 
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options,
-      });
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options,
+    });
 
-      if (error) throw error;
-
-      // For redirect flows, the browser navigates away so code after this
-      // typically won't run. If we land here without a redirect, try to
-      // navigate using the existing flow.
-      toast.success("Welcome!");
-      await navigateAfterAuth();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Google sign-in failed");
-    } finally {
-      setGoogleLoading(false);
-    }
-  };
+    if (error) throw error;
+  } catch (err) {
+    toast.error(err instanceof Error ? err.message : "Google sign-in failed");
+  } finally {
+    setGoogleLoading(false);
+  }
+};
 
   const applySavedLogin = (saved: SavedLogin) => {
     if (saved.provider === "google") {
@@ -378,6 +394,14 @@ function LoginPage() {
               </form>
             ) : (
               <>
+              {blockedEmailError && (
+                <Alert variant="destructive">
+                  <AlertDescription>
+                    <strong>Access denied.</strong> This platform is only available to VIT students.
+                    Please sign in with your @vitstudent.ac.in or @vit.ac.in email address.
+                  </AlertDescription>
+                </Alert>
+              )}
                 <Button
                   type="button"
                   variant="outline"
