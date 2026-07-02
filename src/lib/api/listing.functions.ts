@@ -32,7 +32,7 @@ export const deleteListing = createServerFn({ method: "POST" })
         table: "food_listings",
         imagesTable: "food_images",
         bucket: "food-images",
-        requestsTable: "food_requests",
+        requestsTable: "food_orders",
         requestCol: "food_listing_id",
       },
       notes: {
@@ -46,8 +46,8 @@ export const deleteListing = createServerFn({ method: "POST" })
     } as const;
 
     type MapEntry = {
-      table: keyof import("@/integrations/supabase/types").Database["public"]["Tables"];
-      imagesTable: keyof import("@/integrations/supabase/types").Database["public"]["Tables"];
+      table: string;
+      imagesTable: string;
       imagesTableIdCol?: string;
       bucket: string;
       requestsTable: string;
@@ -57,38 +57,34 @@ export const deleteListing = createServerFn({ method: "POST" })
     const cfg = (map as unknown as Record<string, MapEntry>)[itemType];
     if (!cfg) throw new Error("Unknown item type");
 
-    // Check for active requests referencing this listing
+    // Check for active (non-terminal) requests referencing this listing
     try {
-      // Use an explicit, shallowly-typed result to avoid deep generic inference from the supabase client types.
-      const reqCountRes = (await (supabaseAdmin as unknown as {
-        from: (table: string) => {
-          select: (cols: string, opts?: any) => { eq: (col: string, val: string) => Promise<{ count: number | null; error: any }>; };
-        };
-      }).from(cfg.requestsTable)
+      const reqCountRes = await (supabaseAdmin as any)
+        .from(cfg.requestsTable)
         .select("id", { count: "exact", head: true })
-        .eq(cfg.requestCol!, itemId)) as { count: number | null; error: any };
-
+        .eq(cfg.requestCol!, itemId)
+        .not("status", "in", "(completed,rejected,cancelled,returned)");
       if (reqCountRes.error) throw reqCountRes.error;
       const count = reqCountRes.count ?? 0;
       if (count > 0) {
         throw new Error("There are active requests for this listing — cannot delete.");
       }
     } catch (e) {
-      // bubble up
       throw e;
     }
 
     // fetch image storage paths
-    const imagesRes = await (supabaseAdmin as unknown as { from: (table: string) => { select: (cols: string) => { eq: (col: string, val: string) => Promise<{ data: any[] | null; error: any }>; }; }; }).from(
-      cfg.imagesTable,
-    ).select("storage_path").eq(cfg.imagesTableIdCol ?? (cfg.requestCol === undefined ? "id" : cfg.requestCol!), itemId as string);
+    const imagesRes = await (supabaseAdmin as any)
+      .from(cfg.imagesTable)
+      .select("storage_path")
+      .eq(cfg.imagesTableIdCol ?? cfg.requestCol ?? "id", itemId);
     const images = (imagesRes.data ?? []) as Array<{ storage_path?: string }>;
     const paths: string[] = images.map((r) => r.storage_path ?? "").filter(Boolean);
 
     // remove storage objects (if any)
     if (paths.length) {
       try {
-    await (supabaseAdmin as any).storage.from(cfg.bucket).remove(paths);
+        await (supabaseAdmin as any).storage.from(cfg.bucket).remove(paths);
       } catch (err) {
         console.warn("admin: failed to remove storage objects", err);
       }
@@ -96,19 +92,19 @@ export const deleteListing = createServerFn({ method: "POST" })
 
     // delete image rows
     try {
-      await (supabaseAdmin as unknown as { from: (table: string) => { delete: () => { eq: (col: string, val: string) => Promise<any>; }; }; })
+      await (supabaseAdmin as any)
         .from(cfg.imagesTable)
         .delete()
-        .eq(cfg.imagesTableIdCol ?? (cfg.requestCol === undefined ? "id" : cfg.requestCol!), itemId as string);
+        .eq(cfg.imagesTableIdCol ?? cfg.requestCol ?? "id", itemId);
     } catch (e) {
       console.warn("admin: failed to delete image rows", e);
     }
 
     // delete listing row
-    const delRes = await (supabaseAdmin as unknown as { from: (table: string) => { delete: () => { eq: (col: string, val: string) => { select: (cols: string) => Promise<{ error: any; data?: any[] }>; }; }; }; })
+    const delRes = await (supabaseAdmin as any)
       .from(cfg.table)
       .delete()
-      .eq("id", itemId as string)
+      .eq("id", itemId)
       .select("id");
     if (delRes.error) throw delRes.error;
     if (!delRes.data || delRes.data.length === 0) {
@@ -117,7 +113,6 @@ export const deleteListing = createServerFn({ method: "POST" })
 
     // log admin action
     try {
-      // admin_actions.generated types expect `action_type` not `action`.
       await (supabaseAdmin as any).from("admin_actions").insert({
         action_type: "remove_listing",
         target_listing_id: itemId,
